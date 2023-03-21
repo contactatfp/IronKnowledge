@@ -47,6 +47,8 @@ class YouTubeVideo(db.Model):
     like_count = db.Column(db.Integer, nullable=True)
     dislike_count = db.Column(db.Integer, nullable=True)
     comment_count = db.Column(db.Integer, nullable=True)
+    search_query = db.Column(db.String(255))
 
-    def __str__(self):
+
+def __str__(self):
         return self.title

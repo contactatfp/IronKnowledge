@@ -3,14 +3,22 @@ import googleapiclient.discovery
 import googleapiclient.errors
 import json
 import yt_dlp
-from moviepy.editor import VideoFileClip
+from moviepy.editor import *
 from isodate import parse_duration
-
 
 with open("secret_config.json", "r") as f:
     secret_config = json.load(f)
 
 youtube_api_key = secret_config["youtube_api_key"]
+
+
+def save_thumbnail(video_path, thumbnail_path):
+    clip = VideoFileClip(video_path)
+    thumbnail = clip.get_frame(1)  # Get the first frame of the video
+    thumbnail_image = ImageClip(thumbnail, duration=clip.duration)
+    thumbnail_image.save_frame(thumbnail_path)
+
+
 
 def create_folder(folder_path):
     if not os.path.exists(folder_path):
@@ -61,6 +69,7 @@ def get_video_ids(search_query, max_duration):
 
     return valid_video_ids
 
+
 def slice_video(search_query, video_id):
     input_path = f'videos/{search_query}/{video_id}.mp4'
     video = VideoFileClip(input_path)
@@ -72,8 +81,11 @@ def slice_video(search_query, video_id):
 
     while start_time < video_duration:
         clip = video.subclip(start_time, min(end_time, video_duration))
+        create_folder(f'static/{search_query}/')
         output_path = f'videos/{search_query}/{video_id}_part{counter}.mp4'
+        thumbnail_path = f'static/{search_query}/{video_id}_part{counter}.jpg'
         clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+        save_thumbnail(output_path, thumbnail_path)  # Save the thumbnail
         clip.close()
 
         start_time += 60

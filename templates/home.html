@@ -19,6 +19,27 @@
                     </div>
                 </div>
             </form>
+            {% if search_query != '' %}
+                <div class="row mt-5">
+                    {% if videos %}
+                        <div class="row">
+                            {% for video in videos %}
+                                {% if video.player_name.lower() == search_query.lower() %}
+                                    <div class="col-md-4">
+                                        <div class="card">
+                                            <img src="{{ url_for('static', filename=search_query + '/' + video.thumbnail_path.split('/')[-1]) }}" alt="Thumbnail" class="img-thumbnail">
+                                            <div class="card-body">
+                                                <h5 class="card-title">{{ video.player_name }}</h5>
+                                                <a href="{{ video.youtube_link }}" class="btn btn-primary" target="_blank">Watch on YouTube</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
         {% endif %}
     </div>
 {% endblock %}
