@@ -1,15 +1,7 @@
-from flask import Flask, app
-from flask_login import LoginManager
-from models import db, User
-from routes import bp
+from flask import Flask
+from models import db
 from config import Config
-from scraper import main as scrape_youtube
-
-
-@bp.route('/scrape')
-def scrape():
-    scrape_youtube()
-    return "Scraping started. Check the 'videos' folder for the downloaded videos."
+from routes import bp as routes_bp
 
 
 def create_app(config=None):
@@ -32,19 +24,10 @@ def setup_app(app):
     with app.app_context():
         db.create_all()
 
-    # Set up the login manager
-    login_manager = LoginManager()
-    login_manager.login_view = 'routes.login'
-    login_manager.init_app(app)
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        return User.query.get(int(user_id))
-
-    # Register the blueprint
-    app.register_blueprint(bp, url_prefix='')
+    # Register the Blueprint
+    app.register_blueprint(routes_bp)
 
 
 if __name__ == "__main__":
     app = create_app()
-    app.run()
+    app.run(debug=True, host='0.0.0.0', port=8000)
