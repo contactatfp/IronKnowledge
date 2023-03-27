@@ -2,8 +2,7 @@ from flask import Flask
 from models import db
 from config import Config
 from routes import bp as routes_bp
-import os
-from utils import get_downloaded_videos
+
 
 
 
