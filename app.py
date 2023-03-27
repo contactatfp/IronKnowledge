@@ -1,15 +1,10 @@
-from flask import Flask, app
-from flask_login import LoginManager
-from models import db, User
-from routes import bp
+from flask import Flask
+from models import db
 from config import Config
-from scraper import main as scrape_youtube
+from routes import bp as routes_bp
+import os
+from utils import get_downloaded_videos
 
-
-@bp.route('/scrape')
-def scrape():
-    scrape_youtube()
-    return "Scraping started. Check the 'videos' folder for the downloaded videos."
 
 
 def create_app(config=None):
@@ -26,25 +21,36 @@ def create_app(config=None):
     return app
 
 
+# def get_downloaded_videos():
+#     video_folder = 'videos'
+#     video_files = []
+#     for player_name in os.listdir(video_folder):
+#         player_folder = os.path.join(video_folder, player_name)
+#         for video in os.listdir(player_folder):
+#             if video.endswith('.mp4'):
+#                 video_id = video.split('.')[0]
+#                 video_path = os.path.join(player_folder, video)
+#                 thumbnail_path = f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'
+#                 youtube_link = f'https://www.youtube.com/watch?v={video_id}'
+#                 video_files.append({
+#                     'player_name': player_name,
+#                     'video_path': video_path,
+#                     'thumbnail_path': thumbnail_path,
+#                     'youtube_link': youtube_link
+#                 })
+#     return video_files
+
+
 def setup_app(app):
     # Initialize the database
     db.init_app(app)
     with app.app_context():
         db.create_all()
 
-    # Set up the login manager
-    login_manager = LoginManager()
-    login_manager.login_view = 'routes.login'
-    login_manager.init_app(app)
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        return User.query.get(int(user_id))
-
-    # Register the blueprint
-    app.register_blueprint(bp, url_prefix='')
+    # Register the Blueprint
+    app.register_blueprint(routes_bp)
 
 
 if __name__ == "__main__":
     app = create_app()
-    app.run()
+    app.run(debug=True, host='0.0.0.0', port=8000)

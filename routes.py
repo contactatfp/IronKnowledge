@@ -1,15 +1,33 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_user, logout_user, login_required, current_user
 from models import db, User, YouTubeChannel, YouTubeVideo
+from flask import request
+from scraper import scrape_youtube
+from utils import get_downloaded_videos
+from flask import send_from_directory
 
 bp = Blueprint("routes", __name__)
 
 
+@bp.route("/search", methods=["POST"])
+def search():
+    search_query = request.form['search_query']
+    scrape_youtube(search_query)
+    return redirect(url_for("routes.home", search_query=search_query))
+
+
+@bp.route('/thumbnails/<path:path>')
+def send_thumbnail(path):
+    return send_from_directory('thumbnails', path)
+
+
 @bp.route("/")
-@login_required
-def index():
+def home():
+    search_query = request.args.get('search_query', '')
     channels = YouTubeChannel.query.all()
-    return render_template("index.html", channels=channels)
+    videos = get_downloaded_videos(search_query)
+    print(search_query)
+    return render_template("home.html", channels=channels, videos=videos, search_query=search_query)
 
 
 @bp.route("/register", methods=["GET", "POST"])
@@ -46,7 +64,6 @@ def login():
 
 
 @bp.route("/logout")
-@login_required
 def logout():
     logout_user()
     flash("You have been logged out", "success")

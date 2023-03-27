@@ -3,7 +3,7 @@ import googleapiclient.discovery
 import googleapiclient.errors
 import json
 import yt_dlp
-from moviepy.editor import VideoFileClip
+from moviepy.editor import *
 from isodate import parse_duration
 
 with open("secret_config.json", "r") as f:
@@ -11,32 +11,13 @@ with open("secret_config.json", "r") as f:
 
 youtube_api_key = secret_config["youtube_api_key"]
 
-male_names = [
-    "Novak Djokovic", "Daniil Medvedev", "Rafael Nadal",
-    "Stefanos Tsitsipas",
-    "Alexander Zverev", "Andrey Rublev", "Matteo Berrettini", "Casper Ruud",
-    "Denis Shapovalov", "Hubert Hurkacz", "Diego Schwartzman", "Pablo Carreno Busta",
-    "Felix Auger-Aliassime", "Gael Monfils", "Roberto Bautista Agut", "Karen Khachanov",
-    "Jannik Sinner", "Cristian Garin", "Grigor Dimitrov", "Alex de Minaur",
-    "Aslan Karatsev", "David Goffin", "Reilly Opelka", "Cameron Norrie",
-    "Fabio Fognini", "John Isner", "Dan Evans", "Nick Kyrgios", "Taylor Fritz",
-    "Adrian Mannarino", "Ugo Humbert", "Nikoloz Basilashvili", "Alejandro Davidovich Fokina",
-    "Dusan Lajovic", "Marton Fucsovics", "Jan-Lennard Struff", "Lloyd Harris",
-    "Albert Ramos-Vinolas", "Kei Nishikori", "Benoit Paire", "Guido Pella",
-    "Richard Gasquet", "Filip Krajinovic", "Yoshihito Nishioka", "Laslo Djere",
-    "Marin Cilic", "Tommy Paul", "Jeremy Chardy", "Vasek Pospisil", "Lorenzo Sonego"
-]
 
-female_names = [
-    "Ashleigh Barty", "Aryna Sabalenka", "Naomi Osaka", "Elina Svitolina",
-    "Karolina Pliskova", "Bianca Andreescu", "Sofia Kenin", "Iga Swiatek",
-    "Garbine Muguruza", "Petra Kvitova", "Simona Halep", "Barbora Krejcikova",
-    "Jennifer Brady", "Victoria Azarenka", "Cori Gauff", "Maria Sakkari",
-    "Anastasia Pavlyuchenkova", "Elena Rybakina", "Paula Badosa", "Ons Jabeur",
-    "Karolina Muchova", "Jessica Pegula", "Jelena Ostapenko", "Veronika Kudermetova"
-]
+def save_thumbnail(video_path, thumbnail_path):
+    clip = VideoFileClip(video_path)
+    thumbnail = clip.get_frame(1)  # Get the first frame of the video
+    thumbnail_image = ImageClip(thumbnail, duration=clip.duration)
+    thumbnail_image.save_frame(thumbnail_path)
 
-tennis_players = male_names + female_names
 
 
 def create_folder(folder_path):
@@ -44,12 +25,12 @@ def create_folder(folder_path):
         os.makedirs(folder_path)
 
 
-def download_video(video_id, player_name):
-    create_folder(f'videos/{player_name}')
+def download_video(video_id, search_query):
+    create_folder(f'videos/{search_query}')
     video_url = f'https://www.youtube.com/watch?v={video_id}'
 
     ydl_opts = {
-        'outtmpl': f'videos/{player_name}/{video_id}.mp4',
+        'outtmpl': f'videos/{search_query}/{video_id}.mp4',
         'format': 'bestvideo[ext=mp4]/mp4',
         'quiet': True,
         'postprocessors': [],
@@ -59,14 +40,14 @@ def download_video(video_id, player_name):
         ydl.download([video_url])
 
 
-def get_video_ids(player_name, max_duration):
+def get_video_ids(search_query, max_duration):
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=youtube_api_key)
 
     # Step 1: Get video IDs
     search_request = youtube.search().list(
         part="id",
         type="video",
-        q=player_name,
+        q=search_query,
         videoDefinition="high",
         maxResults=50,
     )
@@ -89,19 +70,8 @@ def get_video_ids(player_name, max_duration):
     return valid_video_ids
 
 
-
-def get_size(start_path='.'):
-    total_size = 0
-    for dirpath, _, filenames in os.walk(start_path):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            if not os.path.islink(fp):
-                total_size += os.path.getsize(fp)
-    return total_size
-
-
-def slice_video(player_name, video_id):
-    input_path = f'videos/{player_name}/{video_id}.mp4'
+def slice_video(search_query, video_id):
+    input_path = f'videos/{search_query}/{video_id}.mp4'
     video = VideoFileClip(input_path)
     video_duration = video.duration
 
@@ -111,8 +81,11 @@ def slice_video(player_name, video_id):
 
     while start_time < video_duration:
         clip = video.subclip(start_time, min(end_time, video_duration))
-        output_path = f'videos/{player_name}/{video_id}_part{counter}.mp4'
+        create_folder(f'static/{search_query}/')
+        output_path = f'videos/{search_query}/{video_id}_part{counter}.mp4'
+        thumbnail_path = f'static/{search_query}/{video_id}_part{counter}.jpg'
         clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+        save_thumbnail(output_path, thumbnail_path)  # Save the thumbnail
         clip.close()
 
         start_time += 60
@@ -123,20 +96,20 @@ def slice_video(player_name, video_id):
     os.remove(input_path)
 
 
-def main():
-    for player_name in tennis_players:
-        video_ids = get_video_ids(player_name, max_duration=30)  # Pass the max_duration
-        videos_downloaded = 0
-        for video_id in video_ids:
-            if videos_downloaded >= 10:
-                break
+def scrape_youtube(search_query):
+    video_ids = get_video_ids(search_query, max_duration=30)
+    videos_downloaded = 0
+    for video_id in video_ids:
+        if videos_downloaded >= 10:
+            break
 
-            download_video(video_id, player_name)
-            slice_video(player_name, video_id)
-            videos_downloaded += 1
+        download_video(video_id, search_query)
+        slice_video(search_query, video_id)
+        videos_downloaded += 1
 
-        print(f'{player_name} videos downloaded: {videos_downloaded}')
+    print(f'Videos downloaded for {search_query}: {videos_downloaded}')
 
 
 if __name__ == "__main__":
-    main()
+    search_query = input("Enter a search query: ")
+    scrape_youtube(search_query)

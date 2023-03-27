@@ -1,16 +1,45 @@
 {% extends "base.html" %}
 
 {% block content %}
-    {% if user %}
-        <h1>Welcome, {{ user.username }}!</h1>
-    {% else %}
-        <h1>Please log in</h1>
-        <form method="post">
-            <div class="mb-3">
-                <label for="username" class="form-label">Username</label>
-                <input type="text" class="form-control" name="username" id="username" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Login</button>
-        </form>
-    {% endif %}
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <div class="container mt-5">
+        {% if user %}
+            <h1>Welcome, {{ user.username }}!</h1>
+        {% else %}
+            <h1>Enter Search</h1>
+            <form action="{{ url_for('routes.search') }}" method="POST" class="form-inline">
+                <div class="input-group">
+                    <input type="text" name="search_query" class="form-control" placeholder="Search...">
+                    <div class="input-group-append">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </div>
+                </div>
+            </form>
+            {% if search_query != '' %}
+                <div class="row mt-5">
+                    {% if videos %}
+                        <div class="row">
+                            {% for video in videos %}
+                                {% if video.player_name.lower() == search_query.lower() %}
+                                    <div class="col-md-4">
+                                        <div class="card">
+                                            <img src="{{ url_for('static', filename=search_query + '/' + video.thumbnail_path.split('/')[-1]) }}" alt="Thumbnail" class="img-thumbnail">
+                                            <div class="card-body">
+                                                <h5 class="card-title">{{ video.player_name }}</h5>
+                                                <a href="{{ video.youtube_link }}" class="btn btn-primary" target="_blank">Watch on YouTube</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
 {% endblock %}
