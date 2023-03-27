@@ -49,6 +49,10 @@ class YouTubeVideo(db.Model):
     comment_count = db.Column(db.Integer, nullable=True)
     search_query = db.Column(db.String(255))
 
+    @property
+    def youtube_link(self):
+        return f"https://www.youtube.com/watch?v={self.video_id}"
+
 
 def __str__(self):
         return self.title

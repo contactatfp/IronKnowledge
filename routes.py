@@ -26,7 +26,7 @@ def home():
     search_query = request.args.get('search_query', '')
     channels = YouTubeChannel.query.all()
     videos = get_downloaded_videos(search_query)
-    print(search_query)
+
     return render_template("home.html", channels=channels, videos=videos, search_query=search_query)
 
 

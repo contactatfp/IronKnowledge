@@ -4,8 +4,6 @@ from config import Config
 from routes import bp as routes_bp
 
 
-
-
 def create_app(config=None):
     app = Flask(__name__)
 
