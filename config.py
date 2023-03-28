@@ -1,8 +1,6 @@
 import os
 import json
 
-
-
 # Load the secret_config.json file
 with open("secret_config.json", "r") as f:
     secret_config = json.load(f)
