@@ -2,6 +2,7 @@ import io
 from os import abort
 from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import current_user
+
 from models import Project, db, Document
 
 dashboard_bp = Blueprint('dashboard_bp', __name__)
@@ -80,6 +81,9 @@ def add_document(project_id):
             # get the document name from the form
             document_name = request.form.get('document_name')
 
+            if not document_name:
+                document_name = file.filename
+
             # create a new document object
             new_document = Document(name=document_name, project_id=project_id, content=content)
 
@@ -87,8 +91,20 @@ def add_document(project_id):
             db.session.add(new_document)
             db.session.commit()
 
+            # Fine-tune the model for the project
+            # fine_tune_project_model(project_id)
+
             # redirect the user to the project details page
             return redirect(url_for('dashboard_bp.project_details', project_id=project_id))
+    #     otherwise if input is text only commit it to the database
+        elif request.form.get('document_content'):
+            document_name = request.form.get('document_name')
+            document_content = request.form.get('document_content')
+            if document_name:
+                new_document = Document(name=document_name, project_id=project_id, content=document_content)
+                db.session.add(new_document)
+                db.session.commit()
+                return redirect(url_for('dashboard_bp.project_details', project_id=project_id))
 
     return render_template('add_document.html', project=project, project_id=project_id)
 

@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Project Chat{% endblock %}
+
+{% block content %}
+    <div class="d-flex flex-column h-100">
+        <div id="chat-box" class="flex-grow-1 p-3" style="background-color: #f8f9fa;">
+            <!-- Chat messages will be added here -->
+        </div>
+        <div class="fixed-bottom">
+            <form id="chat-form" class="p-3" onsubmit="return false;">
+                <div class="input-group">
+                    <input type="text" id="chat-input" class="form-control" placeholder="Type your message here" required>
+                    <div class="input-group-append">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        function addMessageToChat(role, content) {
+            const chatBox = $('#chat-box');
+            const message = $('<div>').addClass('my-2');
+            const messageRole = $('<strong>').text(role + ': ');
+            const messageContent = $('<span>').text(content);
+            message.append(messageRole, messageContent);
+            chatBox.append(message);
+            scrollToBottomIfNeeded();
+            autoscroll()
+        }
+
+        function scrollToBottomIfNeeded() {
+            const chatBox = $('#chat-box');
+            const lastMessage = chatBox.children().last();
+            const chatInput = $('#chat-input');
+
+            if (lastMessage.length > 0 && lastMessage.offset().top + lastMessage.outerHeight() > chatInput.offset().top) {
+                chatBox.scrollTop(chatBox.scrollHeight);
+            }
+        }
+
+        function autoscroll(){
+            const element = document.getElementById("chat-box");
+            element.scrollTo(0, element.scrollHeight)
+        }
+
+        $('#chat-form').on('submit', function () {
+            const inputField = $('#chat-input');
+            const userInput = inputField.val().trim();
+
+            if (userInput) {
+                addMessageToChat('User', userInput);
+
+                $.ajax({
+                    type: "POST",
+                    url: "{{ url_for('chat') }}",
+                    data: {user_input: userInput},
+                    success: function(response) {
+                        if (response.error) {
+                            alert("Error: " + response.error);
+                        } else {
+                            addMessageToChat('Assistant', response.assistant_message);
+                        }
+                    },
+                    error: function() {
+                        alert("Error: Unable to connect to the server");
+                    }
+                });
+
+
+                $("#chat-input").val("");
+            }
+        });
+
+        // Scroll to bottom initially
+        scrollToBottomIfNeeded();
+    </script>
+{% endblock %}

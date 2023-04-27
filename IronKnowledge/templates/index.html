@@ -1,25 +1,74 @@
 {% extends "base.html" %}
 
+{% block title %}
+    IronKnowledge - AI-powered project management app
+{% endblock %}
+
 {% block content %}
-    <div class="container my-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h1 class="text-center">Welcome to Project Summarizer</h1>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-center">
-                            {% if is_authenticated %}
-                                <a href="{{ url_for('logout') }}" class="btn btn-primary btn-lg me-3">Logout</a>
-                            {% else %}
-                                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg me-3">Login</a>
-                            {% endif %}
-                            <a href="{{ url_for('register') }}" class="btn btn-secondary btn-lg">Register</a>
-                        </div>
-                    </div>
-                </div>
+
+    <body>
+
+
+    <div class="container-fluid px-0">
+    <div class="row hero-section align-items-center">
+        <div class="col-md-6 order-md-2 text-center">
+            <img src="https://sloanreview.mit.edu/wp-content/uploads/2022/12/2022_12200_Davenport-Redman-1290x860-1.jpg" alt="IronKnowledge dashboard" class="img-fluid">
+        </div>
+        <div class="col-md-6 order-md-1">
+            <h1 class="display-3 mb-3">Project Management,<br>Powered by AI</h1>
+            <p class="lead mb-4">IronKnowledge is the AI-powered project management app that makes your life easier. Get started today and experience a new level of project management.</p>
+            <a class="btn btn-lg btn-primary mr-2" href="#" role="button">Sign up now</a>
+            <a class="btn btn-lg btn-outline-primary" href="#" role="button">Learn more</a>
+        </div>
+    </div>
+
+    <div class="row feature-section py-5">
+    <div class="col-md-4">
+    <div class="card-body">
+        <h2 class="card-title mb-3">AI-powered Summarization</h2>
+        <p class="card-text mb-4">IronKnowledge uses GPT-4 AI models with engineered prompts to capture and summarize project information. After the model summarizes the information, the user can approve, adjust, or delete the summary.</p>
+    </div>
+    </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow mb-4">
+            <div class="card-body">
+                <h2 class="card-title mb-3">Living Document Dashboard</h2>
+                <p class="card-text mb-4">The living document is hosted on a cloud-based dashboard accessible to all users. Only selected users will be able to add to the document. The dashboard is designed using a Flask framework with Bootstrap styling, and the search functionality will be similar to a chat search, with the model providing attachments as evidence or return.</p>
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow mb-4">
+            <div class="card-body">
+                <h2 class="card-title mb-3">Modular HR Data Integration</h2>
+                <p class="card-text mb-4">IronKnowledge provides modular integration with HR data systems such as SAP or Workday to ensure the most up-to-date information is captured. The app also updates the living document when the model learns new information. However, any update would require user input to verify and approve the changes.</p>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <div class="row py-5">
+        <div class="col-md-6">
+            <h2 class="mb-3">Data Accuracy and Bias Safeguards</h2>
+            <p class="mb-4">The app is designed to prevent incorrect or incomplete information from being added to the living document. We have safeguards in place to ensure that information is accurate and unbiased.</p>
+        </div>
+        <div class="col-md-6">
+            <h2 class="mb-3">Version Control</h2>
+            <p class="mb-4">The app will have a version control feature that allows users to see previous versions of the living document and compare changes over time.</p>
+        </div>
+    </div>
+
+    <div class="row call-to-action py-5">
+        <div class="col-md-12 text-center">
+            <h2 class="mb-3">Ready to take your project management to the next level?</h2>
+            <a class="btn btn-lg btn-primary mr-2" href="#" role="button">Sign up now</a>
+            <a class="btn btn-lg btn-outline-primary" href="#" role="button">Learn more</a>
+        </div>
+    </div>
+
+    </div>
+    </body>
+
+
 {% endblock %}

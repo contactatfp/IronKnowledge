@@ -27,6 +27,7 @@ class Project(db.Model):
     version = db.Column(db.String(20), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     documents = db.relationship('Document', backref='project', lazy=True)
+    model_name = db.Column(db.String(100), nullable=True)
 
     def __repr__(self):
         return f'<Project {self.name}>'

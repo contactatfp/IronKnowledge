@@ -1,4 +1,7 @@
-from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint
+import json
+
+import openai
+from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify
 from flask_bootstrap import Bootstrap
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -19,6 +22,11 @@ migrate = Migrate(app, db)
 login = LoginManager(app)
 login.login_view = 'login'
 app.app_context().push()
+
+with open('config.json') as f:
+    config = json.load(f)
+
+openai.api_key = config['api_secret']
 
 
 @login.user_loader
@@ -52,6 +60,52 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+def fine_tune_project_model(project_id):
+    project = Project.query.get_or_404(project_id)
+    documents = project.documents
+
+    # Concatenate the text content of all the project's documents
+    training_text = "\n".join([doc.content for doc in documents])
+
+    # Train a fine-tuned model using OpenAI's API (you need to implement the fine-tuning process)
+    model_name = train_fine_tuned_model(training_text)
+
+    # Save the fine-tuned model name in the project's model_name field
+    project.model_name = model_name
+    db.session.commit()
+
+def train_fine_tuned_model(training_text):
+    # You will need to implement the fine-tuning process using OpenAI's API
+    # For more details on how to do this, check the OpenAI documentation
+    # After the fine-tuning process is complete, return the model name
+    pass
+
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_input = request.form.get('user_input')
+    if not user_input:
+        return jsonify({"error": "User input is empty"}), 400
+
+    try:
+        completion = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": user_input}]
+        )
+
+        assistant_message = completion.choices[0].message.content
+        return jsonify({"assistant_message": assistant_message})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/project/<int:project_id>/chat', methods=['GET'])
+@login_required
+def project_chat(project_id):
+    project = Project.query.get_or_404(project_id)
+    return render_template('chat.html', project=project)
 
 
 @app.route('/register', methods=['GET', 'POST'])

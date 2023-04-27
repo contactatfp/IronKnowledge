@@ -21,20 +21,22 @@
             </form>
             {% if search_query != '' %}
                 <div class="row mt-5">
+                    <div class="col-md-12 mb-3">
+                        <a href="{{ url_for('routes.download_all_videos', search_query=search_query) }}" class="btn btn-success">See All Videos</a>
+                    </div>
                     {% if videos %}
                         <div class="row">
                             {% for video in videos %}
-                                {% if video.player_name.lower() == search_query.lower() %}
                                     <div class="col-md-4">
                                         <div class="card">
-                                            <img src="{{ url_for('static', filename=search_query + '/' + video.thumbnail_path.split('/')[-1]) }}" alt="Thumbnail" class="img-thumbnail">
+                                            <img src="{{ url_for('static', filename=search_query + '/' + video.video_id + '.jpg') }}" alt="Thumbnail" class="img-thumbnail">
                                             <div class="card-body">
-                                                <h5 class="card-title">{{ video.player_name }}</h5>
+                                                <h5 class="card-title">{{ search_query }}</h5>
                                                 <a href="{{ video.youtube_link }}" class="btn btn-primary" target="_blank">Watch on YouTube</a>
+                                                <a href="{{ url_for('routes.download_video_route', video_id=video.video_id, search_query=search_query) }}" class="btn btn-secondary" download="{{ video.video_id }}.mp4">Download</a>
                                             </div>
                                         </div>
                                     </div>
-                                {% endif %}
                             {% endfor %}
                         </div>
                     {% endif %}
@@ -43,3 +45,6 @@
         {% endif %}
     </div>
 {% endblock %}
+
+
+
