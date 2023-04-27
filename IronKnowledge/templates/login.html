@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+            <h1 class="text-center mb-4">Login</h1>
+            <form action="{{ url_for('login') }}" method="post">
+                {{ form.hidden_tag() }}
+                <div class="form-floating mb-3">
+                    {{ form.email(class="form-control", placeholder="Email") }}
+                    <label for="{{ form.email.id }}">Email</label>
+                </div>
+                <div class="form-floating mb-3">
+                    {{ form.password(class="form-control", placeholder="Password") }}
+                    <label for="{{ form.password.id }}">Password</label>
+                </div>
+                <div class="form-check mb-3">
+                    {{ form.remember_me(class="form-check-input") }}
+                    <label class="form-check-label" for="{{ form.remember_me.id }}">Remember me</label>
+                </div>
+                <div class="d-grid">
+                    {{ form.submit(class="btn btn-primary btn-block") }}
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

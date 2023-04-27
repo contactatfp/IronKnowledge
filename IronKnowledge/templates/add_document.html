@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="container">
+        <h1>Add Document</h1>
+        <form action="{{ url_for('dashboard_bp.add_document', project_id=project_id) }}" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" name="document_name" id="name" class="form-control">
+            </div>
+            <div class="form-group">
+                <label for="content">Content:</label>
+                <textarea name="document_content" id="content" class="form-control"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="file">Upload File:</label>
+                <input type="file" name="document_file" id="file" class="form-control-file">
+            </div>
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{{ url_for('dashboard_bp.project_details', project_id=project_id) }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+{% endblock %}

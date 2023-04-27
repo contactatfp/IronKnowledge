@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h1 class="text-center">Welcome to Project Summarizer</h1>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center">
+                            {% if is_authenticated %}
+                                <a href="{{ url_for('logout') }}" class="btn btn-primary btn-lg me-3">Logout</a>
+                            {% else %}
+                                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg me-3">Login</a>
+                            {% endif %}
+                            <a href="{{ url_for('register') }}" class="btn btn-secondary btn-lg">Register</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
