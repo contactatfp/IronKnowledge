@@ -6,10 +6,9 @@ import pandas as pd  # for storing text and embeddings data
 import tiktoken  # for counting tokens
 from scipy import spatial  # for calculating vector similarities for search
 
-
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
-GPT_MODEL = "gpt-3.5-turbo"
+GPT_MODEL = "gpt-4"
 
 embeddings_path = 'email_embeddings.csv'
 
@@ -20,6 +19,7 @@ openai.api_key = config['api_secret']
 
 df = pd.read_csv(embeddings_path)
 df['embedding'] = df['embedding'].apply(ast.literal_eval)
+
 
 # print(df.head())
 
@@ -49,6 +49,7 @@ def num_tokens(text: str, model: str = GPT_MODEL) -> int:
     """Return the number of tokens in a string."""
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(text))
+
 
 def query_message(
         query: str,
@@ -85,7 +86,7 @@ def ask(
     if print_message:
         print(message)
     messages = [
-        {"role": "system", "content": "You answer questions about the Bloom emails."},
+        {"role": "system", "content": "You answer questions about the Bloom Academy."},
         {"role": "user", "content": message},
     ]
     response = openai.ChatCompletion.create(
@@ -97,4 +98,5 @@ def ask(
     print(response_message)
     return response_message
 
-ask('are there any dates in the emails, if so share the earliest date')
+
+ask('When did Brittany start on the project?')
