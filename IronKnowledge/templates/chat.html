@@ -5,6 +5,7 @@
 {% block content %}
     <div class="d-flex flex-column h-100">
         <div id="chat-box" class="flex-grow-1 p-3" style="background-color: #f8f9fa;">
+
             <!-- Chat messages will be added here -->
         </div>
         <div class="fixed-bottom">
@@ -21,16 +22,23 @@
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        function addMessageToChat(role, content) {
+        function addMessageToChat(role, content, loader = false) {
             const chatBox = $('#chat-box');
             const message = $('<div>').addClass('my-2');
-            const messageRole = $('<strong>').text(role + ': ');
-            const messageContent = $('<span>').text(content);
+            if (role.startsWith('')){
+                const messageRole = role ? $('<strong>').text(role + ' ') : '';
+            } else {
+                const messageRole = role ? $('<strong>').text(role + ': ') : '';
+            }
+            const messageRole = role ? $('<strong>').text(role + ' ') : '';
+            const messageContent = loader ? $('<div>').addClass('skeleton-loader').css({width: '70%', height: '1em'}) : $('<span>').text(content);
             message.append(messageRole, messageContent);
             chatBox.append(message);
             scrollToBottomIfNeeded();
-            autoscroll()
+            autoscroll();
+            return message;
         }
+
 
         function scrollToBottomIfNeeded() {
             const chatBox = $('#chat-box');
@@ -52,13 +60,22 @@
             const userInput = inputField.val().trim();
 
             if (userInput) {
-                addMessageToChat('User', userInput);
+                addMessageToChat('User: ', userInput);
+
+                const loaderMessage = addMessageToChat('Assistant:', '', true);// Add the skeleton loader
+                const loaderMessage2 = addMessageToChat('', '', true);// Add the skeleton loader
+                const loaderMessage3 = addMessageToChat('', '', true);// Add the skeleton loader
+
+
 
                 $.ajax({
                     type: "POST",
                     url: "{{ url_for('chat') }}",
                     data: {user_input: userInput},
                     success: function(response) {
+                        loaderMessage.remove();
+                        loaderMessage2.remove();
+                        loaderMessage3.remove();// Remove the skeleton loader
                         if (response.error) {
                             alert("Error: " + response.error);
                         } else {
@@ -66,14 +83,18 @@
                         }
                     },
                     error: function() {
+                        loaderMessage.remove();
+                        loaderMessage2.remove();
+                        loaderMessage3.remove();// Remove the skeleton loader
                         alert("Error: Unable to connect to the server");
                     }
                 });
-
+                l
 
                 $("#chat-input").val("");
             }
         });
+
 
         // Scroll to bottom initially
         scrollToBottomIfNeeded();
