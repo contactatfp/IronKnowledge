@@ -1,27 +1,29 @@
 import ast  # for converting embeddings saved as strings back to arrays
 import json
-
+from app import db
 import openai  # for calling the OpenAI API
 import pandas as pd  # for storing text and embeddings data
 import tiktoken  # for counting tokens
 from scipy import spatial  # for calculating vector similarities for search
-
+from models import Email
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
 GPT_MODEL = "gpt-4"
-
-embeddings_path = 'email_embeddings.csv'
 
 with open('config.json') as f:
     config = json.load(f)
 
 openai.api_key = config['api_secret']
 
-df = pd.read_csv(embeddings_path)
-df['embedding'] = df['embedding'].apply(ast.literal_eval)
+emails = Email.query.all()
+
+data = [{
+    "email": email.subject + " " + email.snippet,
+    "embedding": email.embedding
+} for email in emails]
 
 
-# print(df.head())
+df = pd.DataFrame(data)
 
 # search function
 def strings_ranked_by_relatedness(

@@ -1,5 +1,5 @@
 from __future__ import print_function
-
+from app import app
 import json
 import os.path
 import openai
@@ -8,7 +8,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import pandas as pd
+from models import db, Email
 
 
 
@@ -112,18 +112,17 @@ def generate_email_embeddings(email_data):
 # Run the Gmail API script and get email data
 email_data = main()
 
-# Check if email_data is not empty
 if email_data:
-    # Generate embeddings for email subjects and snippets
     email_embeddings = generate_email_embeddings(email_data)
 
-    # Save email data and embeddings to a DataFrame
-    email_df = pd.DataFrame({"email": [f"Subject: {email['subject']}\nSnippet: {email['snippet']}" for email in email_data],
-                             "embedding": email_embeddings})
+    with app.app_context():
+        for email, embedding in zip(email_data, email_embeddings):
+            new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding)
+            db.session.add(new_email)
+        db.session.commit()
 
-
-    # Save the DataFrame to a CSV file
-    email_df.to_csv("email_embeddings.csv", index=False)
 else:
     print("No emails found.")
+
+
 

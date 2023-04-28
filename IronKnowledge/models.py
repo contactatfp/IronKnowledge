@@ -42,3 +42,11 @@ class Document(db.Model):
 
     def __repr__(self):
         return f'<Document {self.name}>'
+
+
+class Email(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subject = db.Column(db.String(200), nullable=False)
+    snippet = db.Column(db.Text, nullable=False)
+    embedding = db.Column(db.PickleType, nullable=True)  # Store the embeddings as a pickled object
+
