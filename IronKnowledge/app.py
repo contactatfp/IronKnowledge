@@ -9,6 +9,8 @@ from config import Config
 from forms import LoginForm, RegistrationForm, UpdateSettingsForm
 from models import User, Project, db
 from dashboard import dashboard_bp
+import embedTrain
+
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -60,25 +62,25 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
-def fine_tune_project_model(project_id):
-    project = Project.query.get_or_404(project_id)
-    documents = project.documents
-
-    # Concatenate the text content of all the project's documents
-    training_text = "\n".join([doc.content for doc in documents])
-
-    # Train a fine-tuned model using OpenAI's API (you need to implement the fine-tuning process)
-    model_name = train_fine_tuned_model(training_text)
-
-    # Save the fine-tuned model name in the project's model_name field
-    project.model_name = model_name
-    db.session.commit()
-
-def train_fine_tuned_model(training_text):
-    # You will need to implement the fine-tuning process using OpenAI's API
-    # For more details on how to do this, check the OpenAI documentation
-    # After the fine-tuning process is complete, return the model name
-    pass
+# def fine_tune_project_model(project_id):
+#     project = Project.query.get_or_404(project_id)
+#     documents = project.documents
+#
+#     # Concatenate the text content of all the project's documents
+#     training_text = "\n".join([doc.content for doc in documents])
+#
+#     # Train a fine-tuned model using OpenAI's API (you need to implement the fine-tuning process)
+#     model_name = train_fine_tuned_model(training_text)
+#
+#     # Save the fine-tuned model name in the project's model_name field
+#     project.model_name = model_name
+#     db.session.commit()
+#
+# def train_fine_tuned_model(training_text):
+#     # You will need to implement the fine-tuning process using OpenAI's API
+#     # For more details on how to do this, check the OpenAI documentation
+#     # After the fine-tuning process is complete, return the model name
+#     pass
 
 
 @app.route('/chat', methods=['POST'])
@@ -88,13 +90,14 @@ def chat():
         return jsonify({"error": "User input is empty"}), 400
 
     try:
-        completion = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": user_input}]
-        )
-
-        assistant_message = completion.choices[0].message.content
-        return jsonify({"assistant_message": assistant_message})
+        trainedAsk = embedTrain.ask(user_input)
+        # completion = openai.ChatCompletion.create(
+        #     model="gpt-3.5-turbo",
+        #     messages=[{"role": "user", "content": user_input}]
+        # )
+        #
+        # assistant_message = completion.choices[0].message.content
+        return jsonify({"assistant_message": trainedAsk})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
