@@ -10,6 +10,12 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import pandas as pd
 
+
+
+# models
+EMBEDDING_MODEL = "text-embedding-ada-002"
+GPT_MODEL = "gpt-3.5-turbo"
+
 with open('config.json') as f:
     config = json.load(f)
 
@@ -66,9 +72,11 @@ def main():
             subject = next(h['value'] for h in headers if h['name'] == 'Subject')
             sender = next(h['value'] for h in headers if h['name'] == 'From')
             to = next(h['value'] for h in headers if h['name'] == 'To')
+            date = next(h['value'] for h in headers if h['name'] == 'Date')  # Extract date from headers
 
-            modified_snippet = f"From: {sender} To: {to} {snippet}"
+            modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"  # Prepend date to the modified snippet
             email_data.append({'subject': subject, 'snippet': modified_snippet})
+
 
         return email_data
 
@@ -113,7 +121,9 @@ if email_data:
     email_df = pd.DataFrame({"email": [f"Subject: {email['subject']}\nSnippet: {email['snippet']}" for email in email_data],
                              "embedding": email_embeddings})
 
+
     # Save the DataFrame to a CSV file
     email_df.to_csv("email_embeddings.csv", index=False)
 else:
     print("No emails found.")
+
