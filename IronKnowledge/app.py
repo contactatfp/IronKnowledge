@@ -1,5 +1,4 @@
 import json
-
 import openai
 from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify
 from flask_bootstrap import Bootstrap
