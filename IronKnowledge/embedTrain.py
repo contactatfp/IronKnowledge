@@ -101,4 +101,4 @@ def ask(
     return response_message
 
 
-ask('When did Brittany start on the project?')
+

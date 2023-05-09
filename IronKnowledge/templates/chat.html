@@ -22,6 +22,7 @@
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+
         function addMessageToChat(role, content, loader = false) {
             const chatBox = $('#chat-box');
             const message = $('<div>').addClass('my-2');
@@ -36,6 +37,7 @@
             chatBox.append(message);
             scrollToBottomIfNeeded();
             autoscroll();
+
             return message;
         }
 

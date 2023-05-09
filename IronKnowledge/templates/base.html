@@ -57,12 +57,18 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('refresh_model') }}">Refresh</a>
+                    </li>
                 {% else %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('login') }}">Login</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('refresh_model') }}">Refresh</a>
                     </li>
                 {% endif %}
             </ul>
