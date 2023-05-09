@@ -1,5 +1,10 @@
 from __future__ import print_function
-from app import app
+
+import base64
+import tempfile
+from pathlib import Path
+
+from flask import current_app
 import json
 import os.path
 import openai
@@ -38,7 +43,7 @@ def get_emails(service, domain):
     return emails
 
 
-def main():
+def scrape():
     """Shows basic usage of the Gmail API.
     Lists the user's Gmail emails to or from a specific domain.
     """
@@ -58,7 +63,34 @@ def main():
     try:
         service = build('gmail', 'v1', credentials=creds)
         domain = 'bloomacademy.org'
-        emails = get_emails(service, domain)
+
+        query = f"to:{domain} OR from:{domain}"
+        emails = []
+        result = service.users().messages().list(userId='me', q=query).execute()
+        messages = result.get('messages', [])
+
+        for message in messages:
+            msg = service.users().messages().get(userId='me', id=message['id']).execute()
+
+            # Check for attachments
+            attachments = []
+            for part in msg.get('payload', {}).get('parts', []):
+                if part.get('filename') and part.get('body', {}).get('attachmentId'):
+                    attachment_id = part['body']['attachmentId']
+                    attachment = service.users().messages().attachments().get(
+                        userId='me', messageId=message['id'], id=attachment_id
+                    ).execute()
+                    data = attachment.get('data')
+                    file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+                    file_name = part.get('filename')
+
+                    # Save the attachment to a temporary folder
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file_name).suffix) as tmp_file:
+                        tmp_file.write(file_data)
+                        attachments.append({'file_path': tmp_file.name, 'file_name': file_name})
+
+            msg['attachments'] = attachments
+            emails.append(msg)
 
         if not emails:
             print(f'No emails found to or from {domain}.')
@@ -109,20 +141,20 @@ def generate_email_embeddings(email_data):
     return embeddings
 
 
-# Run the Gmail API script and get email data
-email_data = main()
+def scrape_and_store_emails():
+    email_data = scrape()
 
-if email_data:
-    email_embeddings = generate_email_embeddings(email_data)
+    if email_data:
+        email_embeddings = generate_email_embeddings(email_data)
 
-    with app.app_context():
-        for email, embedding in zip(email_data, email_embeddings):
-            new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding)
-            db.session.add(new_email)
-        db.session.commit()
+        with current_app.app_context():
+            for email, embedding in zip(email_data, email_embeddings):
+                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding)
+                db.session.add(new_email)
+            db.session.commit()
 
-else:
-    print("No emails found.")
+    else:
+        print("No emails found.")
 
 
 

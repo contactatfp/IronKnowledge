@@ -50,3 +50,12 @@ class Email(db.Model):
     snippet = db.Column(db.Text, nullable=False)
     embedding = db.Column(db.PickleType, nullable=True)  # Store the embeddings as a pickled object
 
+
+class Attachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    file_name = db.Column(db.String(200))
+    file_text = db.Column(db.Text)
+    embedding = db.Column(db.PickleType)
+
+    def __repr__(self):
+        return f"<Attachment {self.file_name}>"
