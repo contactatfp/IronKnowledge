@@ -8,7 +8,19 @@
                 <label for="project_name">Project Name</label>
                 <input type="text" class="form-control" id="project_name" name="project_name" required>
             </div>
-            <button type="submit" class="btn btn-primary">Add Project</button>
+            <div class="form-group">
+                <label for="company_domain">Company Domain</label>
+                <input type="text" class="form-control" id="company_domain" name="company_domain" required pattern="[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.com">
+                <small class="form-text text-muted">Please enter the company domain in the format "company.com".</small>
+            </div>
+            <div class="form-group">
+                <label for="keyword">Keyword</label>
+                <input type="text" class="form-control" id="keyword" name="keyword" required>
+            </div>
+{#            create a div that gives more space to the submit button#}
+            <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-block">Add Project</button>
+</div>
         </form>
     </div>
 {% endblock %}
