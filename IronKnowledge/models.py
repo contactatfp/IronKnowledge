@@ -28,6 +28,8 @@ class Project(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     documents = db.relationship('Document', backref='project', lazy=True)
     model_name = db.Column(db.String(100), nullable=True)
+    company_domain = db.Column(db.String(100), nullable=True)  # New field for company domain
+    keyword = db.Column(db.String(100), nullable=True)  # New field for keyword
 
     def __repr__(self):
         return f'<Project {self.name}>'

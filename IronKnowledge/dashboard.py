@@ -1,6 +1,6 @@
 import io
 from os import abort
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
 
 from models import Project, db, Document
@@ -57,12 +57,19 @@ def update_summary(project_id):
 def add_project():
     if request.method == 'POST':
         project_name = request.form.get('project_name')
-        if project_name:
-            new_project = Project(name=project_name, user_id=current_user.id)
+        company_domain = request.form.get('company_domain')  # Get the value of the company_domain field
+        keyword = request.form.get('keyword')  # Get the value of the keyword field
+
+        if project_name and company_domain and keyword:  # Check if all fields are filled
+            new_project = Project(name=project_name, user_id=current_user.id, company_domain=company_domain, keyword=keyword)
             db.session.add(new_project)
             db.session.commit()
             return redirect(url_for('dashboard_bp.dashboard_main'))
+        else:
+            flash('Please fill in all fields.')  # Display an error message if any field is missing
+
     return render_template('add_project.html')
+
 
 
 @dashboard_bp.route('/dashboard/add_document/<int:project_id>', methods=['GET', 'POST'])

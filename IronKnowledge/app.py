@@ -9,7 +9,6 @@ from scipy import spatial
 import fitz
 from config import Config
 from forms import LoginForm, RegistrationForm, UpdateSettingsForm
-from models import User, Project, db, Email
 from dashboard import dashboard_bp
 import docx2txt
 
