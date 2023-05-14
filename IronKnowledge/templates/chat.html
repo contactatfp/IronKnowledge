@@ -4,6 +4,7 @@
 
 {% block content %}
     <div class="d-flex flex-column h-100">
+    <h1>{{ project.name }}</h1>
         <div id="chat-box" class="flex-grow-1 p-3" style="background-color: #f8f9fa;">
 
             <!-- Chat messages will be added here -->
@@ -67,13 +68,17 @@
                 const loaderMessage = addMessageToChat('Assistant:', '', true);// Add the skeleton loader
                 const loaderMessage2 = addMessageToChat('', '', true);// Add the skeleton loader
                 const loaderMessage3 = addMessageToChat('', '', true);// Add the skeleton loader
+                const projectId = '{{ project.id }}';  // Get the project id from the Jinja2 variable
+
 
 
 
                 $.ajax({
                     type: "POST",
                     url: "{{ url_for('chat') }}",
-                    data: {user_input: userInput},
+                    data: {user_input: userInput,
+                            project_id: projectId
+                            },
                     success: function(response) {
                         loaderMessage.remove();
                         loaderMessage2.remove();
@@ -91,7 +96,6 @@
                         alert("Error: Unable to connect to the server");
                     }
                 });
-                l
 
                 $("#chat-input").val("");
             }

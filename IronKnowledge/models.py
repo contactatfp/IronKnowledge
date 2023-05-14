@@ -51,6 +51,8 @@ class Email(db.Model):
     subject = db.Column(db.String(200), nullable=False)
     snippet = db.Column(db.Text, nullable=False)
     embedding = db.Column(db.PickleType, nullable=True)  # Store the embeddings as a pickled object
+    date_of_email = db.Column(db.DateTime, nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
 
 
 class Attachment(db.Model):

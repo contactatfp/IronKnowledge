@@ -17,9 +17,10 @@ def dashboard_main():
 @dashboard_bp.route('/dashboard/<int:project_id>', methods=['GET'])
 def project_details(project_id):
     project = Project.query.get_or_404(project_id)
+    project_domain = Project.query.get_or_404(project_id).company_domain
     if project.user_id != current_user.id:
         abort(403)
-    return render_template('project_details.html', project=project)
+    return render_template('project_details.html', project=project, domain=project_domain)
 
 
 @dashboard_bp.route('/dashboard/<project_id>')
