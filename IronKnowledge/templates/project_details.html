@@ -2,7 +2,10 @@
 
 {% block content %}
     <div class="container">
-        <h1>Project Details</h1>
+        <div class="d-flex justify-content-between align-items-center">
+            <h1>Project Details</h1>
+            <button id="refresh-button" class="btn btn-info pr-10">Refresh</button>
+        </div>
         <p>Name: {{ project.name }}</p>
         <p>Summary: {{ project.summary }}</p>
         <p>Created at: {{ project.created_at }}</p>
@@ -31,4 +34,22 @@
         </table>
         <a href="{{ url_for('dashboard_bp.add_document', project_id=project.id) }}" class="btn btn-success">Add Document</a>
     </div>
+
+    <script>
+        document.getElementById("refresh-button").addEventListener("click", function() {
+            const projectId = '{{ project.id }}'; // Get the project id from the Jinja2 variable
+            const projectDomain = '{{ project.company_domain }}'; // Get the project domain from the Jinja2 variable
+
+            fetch(`/refresh_emails?project_id=${projectId}&project_domain=${projectDomain}`, { // Include the project id and project domain as URL parameters
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+                .catch(error => {
+                    console.error('Error fetching emails:', error);
+                });
+        });
+    </script>
 {% endblock %}

@@ -11,11 +11,7 @@ from config import Config
 from forms import LoginForm, RegistrationForm, UpdateSettingsForm
 from dashboard import dashboard_bp
 import docx2txt
-
 import base64
-import tempfile
-from pathlib import Path
-
 from flask import current_app
 import json
 import os.path
@@ -25,7 +21,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from models import User, Project, db, Email, Attachment
+from models import User, Project, db, Email
+from datetime import datetime
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -54,7 +51,8 @@ emails = Email.query.all()
 
 data = [{
     "email": email.subject + " " + email.snippet,
-    "embedding": email.embedding
+    "embedding": email.embedding,
+    "project_id": email.project_id,
 } for email in emails]
 
 df = pd.DataFrame(data)
@@ -72,10 +70,10 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/refresh_model')
-@login_required
-def refresh_model():
-    return render_template('refresh_model.html')
+# @app.route('/refresh_model')
+# @login_required
+# def refresh_model():
+#     return render_template('refresh_model.html')
 
 
 def extract_text_from_pdf(file_path):
@@ -97,40 +95,12 @@ def extract_text_from_docx(file_path):
 
     return text
 
-
-# Function to process attachments and generate embeddings
-def process_attachment(file_path, file_name):
-    file_extension = Path(file_name).suffix.lower()
-
-    if file_extension == ".pdf":
-        text = extract_text_from_pdf(file_path)
-    elif file_extension in [".docx", ".doc"]:
-        text = extract_text_from_docx(file_path)
-    elif file_extension in [".txt"]:
-        with open(file_path, "r") as txt_file:
-            text = txt_file.read()
-    else:
-        text = ""
-
-    response = openai.Embedding.create(model="text-embedding-ada-002", input=text)
-    embedding = response["data"][0]["embedding"]
-
-    return {"file_name": file_name, "file_text": text, "embedding": embedding}
-
-
-def check_email_exists_in_db(subject, snippet):
-    # that checks for the existence of an email with the given subject and snippet.
-    if Email.query.filter_by(subject=subject, snippet=snippet).first():
-        exists = True
-
-    exists = False  # Set the value of 'exists' based on the query result
-    return exists
-
-
 @app.route('/refresh_emails', methods=['POST'])
 @login_required
 def refresh_emails():
-    email_data = scrape_and_store_emails()
+    project_id = request.args.get('project_id')  # Get the project id from the URL parameters
+    project_domain = request.args.get('project_domain')  # Get the project domain from the URL parameters
+    email_data = scrape_and_store_emails(project_id, project_domain)
     if email_data:
         # Generate embeddings for emails and attachments
         embeddings = generate_email_embeddings(email_data)
@@ -138,13 +108,15 @@ def refresh_emails():
         # Save emails and attachments data in the database
         with current_app.app_context():
             for email, embedding in zip(email_data, embeddings):
-                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding)
+                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
+                                  project_id=project_id)
                 db.session.add(new_email)
 
                 for attachment in email['attachments']:
                     with open(attachment['file_path'], "r") as file:
                         file_content = file.read()
-                    new_attachment = Email(subject=attachment['file_name'], snippet=file_content, embedding=embedding)
+                    new_attachment = Email(subject=attachment['file_name'], snippet=file_content, embedding=embedding,
+                                           project_id=project_id)
                     db.session.add(new_attachment)
 
             db.session.commit()
@@ -158,7 +130,7 @@ def refresh_emails():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('dashboard_bp.dashboard_main'))  # change this line
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
@@ -179,22 +151,24 @@ def logout():
 @app.route('/chat', methods=['POST'])
 def chat():
     user_input = request.form.get('user_input')
+    project_id = int(request.form.get('project_id'))
+
     if not user_input:
         return jsonify({"error": "User input is empty"}), 400
 
-    try:
+    # try:
         # trainedAsk = embedTrain.ask(user_input)
-        trainedAsk = ask(user_input)
+    trainedAsk = ask(project_id, user_input)
         # completion = openai.ChatCompletion.create(
         #     model="gpt-3.5-turbo",
         #     messages=[{"role": "user", "content": user_input}]
         # )
         #
         # assistant_message = completion.choices[0].message.content
-        return jsonify({"assistant_message": trainedAsk})
+    return jsonify({"assistant_message": trainedAsk})
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # except Exception as e:
+    #     return jsonify({"error": str(e)}), 500
 
 
 @app.route('/project/<int:project_id>/chat', methods=['GET'])
@@ -229,25 +203,27 @@ def settings():
     return render_template('settings.html', form=form)
 
 
-@app.route('/settings/update', methods=['POST'])
-@login_required
-def update_settings():
-    form = UpdateSettingsForm(request.form)
-    if form.validate():
-        # Add logic to update user settings here
-        pass
-    return redirect(url_for('settings'))
+# @app.route('/settings/update', methods=['POST'])
+# @login_required
+# def update_settings():
+#     form = UpdateSettingsForm(request.form)
+#     if form.validate():
+#         # Add logic to update user settings here
+#         pass
+#     return redirect(url_for('settings'))
 
 
 # EMBED API
 # search function
 def strings_ranked_by_relatedness(
         query: str,
+        project_id: int,
         df: pd.DataFrame,
         relatedness_fn=lambda x, y: 1 - spatial.distance.cosine(x, y),
         top_n: int = 100
 ) -> tuple[list[str], list[float]]:
     """Returns a list of strings and relatednesses, sorted from most related to least."""
+    df = df[df['project_id'] == project_id]
     query_embedding_response = openai.Embedding.create(
         model=EMBEDDING_MODEL,
         input=query,
@@ -269,18 +245,20 @@ def num_tokens(text: str, model: str = GPT_MODEL) -> int:
 
 
 def query_message(
+        project_id: int,
         query: str,
         df: pd.DataFrame,
         model: str,
         token_budget: int
 ) -> str:
     """Return a message for GPT, with relevant source texts pulled from a dataframe."""
-    strings, relatednesses = strings_ranked_by_relatedness(query, df)
+    strings, relatednesses = strings_ranked_by_relatedness(query, project_id, df)
     introduction = 'Use the emails and attachments below. If the answer cannot be found in the emails or attachments, explain why not and what the closest answer would be.'
     question = f"\n\nQuestion: {query}"
     message = introduction
+    company_name = Project.query.get_or_404(project_id).name
     for string in strings:
-        next_article = f'\n\nBloom Email and attachment thread:\n"""\n{string}\n"""'
+        next_article = f'\n\n${company_name} Email and attachment thread:\n"""\n{string}\n"""'
         if (
                 num_tokens(message + next_article + question, model=model)
                 > token_budget
@@ -292,6 +270,7 @@ def query_message(
 
 
 def ask(
+        project_id: int,
         query: str,
         df: pd.DataFrame = df,
         model: str = GPT_MODEL,
@@ -299,11 +278,13 @@ def ask(
         print_message: bool = False,
 ) -> str:
     """Answers a query using GPT and a dataframe of relevant texts and embeddings."""
-    message = query_message(query, df, model=model, token_budget=token_budget)
+    message = query_message(project_id, query, df, model=model, token_budget=token_budget)
     if print_message:
         print(message)
+
+    company_name = Project.query.get_or_404(project_id).name
     messages = [
-        {"role": "system", "content": "You answer questions about the Bloom Academy."},
+        {"role": "system", "content": f"You answer questions about the ${company_name}."},
         {"role": "user", "content": message},
     ]
     response = openai.ChatCompletion.create(
@@ -316,23 +297,8 @@ def ask(
     return response_message
 
 
-# GMAIL
-
-
-def get_emails(service, domain):
-    query = f"to:{domain} OR from:{domain}"
-    emails = []
-    result = service.users().messages().list(userId='me', q=query).execute()
-    messages = result.get('messages', [])
-
-    for message in messages:
-        msg = service.users().messages().get(userId='me', id=message['id']).execute()
-        emails.append(msg)
-
-    return emails
-
-
-def scrape(local_folder='attachments'):
+def scrape(project_id, project_domain):
+    local_folder = 'attachments'
     if not os.path.exists(local_folder):
         os.makedirs(local_folder)
 
@@ -351,7 +317,7 @@ def scrape(local_folder='attachments'):
 
     try:
         service = build('gmail', 'v1', credentials=creds)
-        domain = 'bloomacademy.org'
+        domain = project_domain
 
         query = f"to:{domain} OR from:{domain}"
         emails = []
@@ -394,7 +360,7 @@ def scrape(local_folder='attachments'):
             date = next(h['value'] for h in headers if h['name'] == 'Date')
 
             modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
-            email_data.append({'subject': subject, 'snippet': modified_snippet})
+            email_data.append({'subject': subject, 'snippet': modified_snippet, 'date_of_email': date})
 
             for attachment in email['attachments']:
                 file_path = attachment['file_path']
@@ -409,7 +375,8 @@ def scrape(local_folder='attachments'):
                 if file_content:
                     email_data.append({
                         'subject': file_name,
-                        'snippet': file_content
+                        'snippet': file_content,
+                        'date_of_email': date
                     })
 
         return email_data
@@ -417,11 +384,6 @@ def scrape(local_folder='attachments'):
     except HttpError as error:
         print(f'An error occurred: {error}')
 
-
-
-#
-# if __name__ == '__main__':
-#     main()
 
 # Function to generate embeddings for email subjects and snippets
 def generate_email_embeddings(email_data):
@@ -457,15 +419,20 @@ def generate_email_embeddings(email_data):
     return embeddings
 
 
-def scrape_and_store_emails():
-    email_data = scrape()
+def scrape_and_store_emails(project_id, project_domain):
+    email_data = scrape(project_id, project_domain)
 
     if email_data:
         email_embeddings = generate_email_embeddings(email_data)
 
         with current_app.app_context():
             for email, embedding in zip(email_data, email_embeddings):
-                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding)
+                date_str = email[
+                    'date_of_email']  # Assuming email['date_of_email'] is a string in the format 'Mon, 24 Apr 2023 16:16:58 -0500'
+                date_obj = datetime.strptime(date_str, "%a, %d %b %Y %H:%M:%S %z")
+                # date_formatted = date_obj.strftime("%Y-%m-%d %H:%M:%S.%f")
+                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
+                                  date_of_email=date_obj, project_id=project_id)
                 db.session.add(new_email)
                 #
                 # for attachment in email['attachments']:
