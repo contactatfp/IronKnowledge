@@ -47,15 +47,13 @@ openai.api_key = config['api_secret']
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-emails = Email.query.all()
 
-data = [{
-    "email": email.subject + " " + email.snippet,
-    "embedding": email.embedding,
-    "project_id": email.project_id,
-} for email in emails]
 
-df = pd.DataFrame(data)
+def get_all_emails():
+    return Email.query.all()
+
+
+
 
 
 @login.user_loader
@@ -94,6 +92,7 @@ def extract_text_from_docx(file_path):
     text = docx2txt.process(file_path)
 
     return text
+
 
 @app.route('/refresh_emails', methods=['POST'])
 @login_required
@@ -157,14 +156,14 @@ def chat():
         return jsonify({"error": "User input is empty"}), 400
 
     # try:
-        # trainedAsk = embedTrain.ask(user_input)
+    # trainedAsk = embedTrain.ask(user_input)
     trainedAsk = ask(project_id, user_input)
-        # completion = openai.ChatCompletion.create(
-        #     model="gpt-3.5-turbo",
-        #     messages=[{"role": "user", "content": user_input}]
-        # )
-        #
-        # assistant_message = completion.choices[0].message.content
+    # completion = openai.ChatCompletion.create(
+    #     model="gpt-3.5-turbo",
+    #     messages=[{"role": "user", "content": user_input}]
+    # )
+    #
+    # assistant_message = completion.choices[0].message.content
     return jsonify({"assistant_message": trainedAsk})
 
     # except Exception as e:
@@ -272,12 +271,20 @@ def query_message(
 def ask(
         project_id: int,
         query: str,
-        df: pd.DataFrame = df,
         model: str = GPT_MODEL,
         token_budget: int = 4096 - 500,
         print_message: bool = False,
 ) -> str:
     """Answers a query using GPT and a dataframe of relevant texts and embeddings."""
+    emails = get_all_emails()
+    data = [{
+        "email": email.subject + " " + email.snippet,
+        "embedding": email.embedding,
+        "project_id": email.project_id,
+    } for email in emails]
+
+    df = pd.DataFrame(data)
+
     message = query_message(project_id, query, df, model=model, token_budget=token_budget)
     if print_message:
         print(message)
