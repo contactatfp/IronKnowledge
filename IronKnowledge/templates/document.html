@@ -3,7 +3,7 @@
 {% block content %}
     <div class="container">
         <h1>{{ filename }}</h1>
-        <iframe src="{{ url_for('dashboard_bp.serve_file', path=path, filename=filename) }}" style="width:100%; height:700px;" frameborder="0"></iframe>
+        <iframe src="{{ url_for('dashboard_bp.serve_file', path=path, filename=filename) }}" style="width:100%; height:700px;"></iframe>
     </div>
 {% endblock %}
 
