@@ -33,7 +33,7 @@
                 const messageRole = role ? $('<strong>').text(role + ': ') : '';
             }
             const messageRole = role ? $('<strong>').text(role + ' ') : '';
-            const messageContent = loader ? $('<div>').addClass('skeleton-loader').css({width: '70%', height: '1em'}) : $('<span>').text(content);
+            const messageContent = loader ? $('<div>').addClass('skeleton-loader').css({width: '70%', height: '1em'}) : $('<span>').html(content);
             message.append(messageRole, messageContent);
             chatBox.append(message);
             scrollToBottomIfNeeded();
@@ -68,9 +68,7 @@
                 const loaderMessage = addMessageToChat('Assistant:', '', true);// Add the skeleton loader
                 const loaderMessage2 = addMessageToChat('', '', true);// Add the skeleton loader
                 const loaderMessage3 = addMessageToChat('', '', true);// Add the skeleton loader
-                const projectId = '{{ project.id }}';  // Get the project id from the Jinja2 variable
-
-
+                const projectId = '{{ project.id }}';
 
 
                 $.ajax({
@@ -80,6 +78,7 @@
                             project_id: projectId
                             },
                     success: function(response) {
+                        console.log("Response:", response);
                         loaderMessage.remove();
                         loaderMessage2.remove();
                         loaderMessage3.remove();// Remove the skeleton loader
