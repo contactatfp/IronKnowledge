@@ -4,7 +4,7 @@ from os import abort
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import current_user
 
-from models import Project, db, Document
+from models import Project, db, Document, Email
 
 dashboard_bp = Blueprint('dashboard_bp', __name__)
 
@@ -32,6 +32,12 @@ def document(document_id):
 @dashboard_bp.route('/<path:path>/<filename>')
 def serve_file(path, filename):
     return send_from_directory('attachments/', filename)
+
+@dashboard_bp.route('/email/<int:email_id>')
+def email(email_id):
+    email = Email.query.get_or_404(email_id)
+    return render_template("email.html", email=email)
+
 
 @dashboard_bp.route('/dashboard/<project_id>')
 def dashboard_project(project_id):

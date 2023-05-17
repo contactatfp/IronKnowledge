@@ -8,6 +8,8 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from scipy import spatial
 import fitz
+
+import project
 from config import Config
 from forms import LoginForm, RegistrationForm, UpdateSettingsForm
 from dashboard import dashboard_bp
@@ -168,6 +170,7 @@ def chat():
     # )
     #
     # assistant_message = completion.choices[0].message.content
+    print("Assistant message:", trainedAsk)
     return jsonify({"assistant_message": trainedAsk})
 
     # except Exception as e:
@@ -206,14 +209,6 @@ def settings():
     return render_template('settings.html', form=form)
 
 
-# @app.route('/settings/update', methods=['POST'])
-# @login_required
-# def update_settings():
-#     form = UpdateSettingsForm(request.form)
-#     if form.validate():
-#         # Add logic to update user settings here
-#         pass
-#     return redirect(url_for('settings'))
 
 
 # EMBED API
@@ -227,18 +222,30 @@ def strings_ranked_by_relatedness(
 ) -> tuple[list[str], list[float]]:
     """Returns a list of strings and relatednesses, sorted from most related to least."""
     df = df[df['project_id'] == project_id]
+    print(f"Dataframe size after filtering by project_id: {df.shape}")
+
     query_embedding_response = openai.Embedding.create(
         model=EMBEDDING_MODEL,
         input=query,
     )
     query_embedding = query_embedding_response["data"][0]["embedding"]
+
     strings_and_relatednesses = [
         (row["email"], relatedness_fn(query_embedding, row["embedding"]))  # Change 'text' to 'email' here
         for i, row in df.iterrows()
     ]
+
+    print(f"Number of strings and relatednesses: {len(strings_and_relatednesses)}")
+
     strings_and_relatednesses.sort(key=lambda x: x[1], reverse=True)
+
+    if not strings_and_relatednesses:
+        print("strings_and_relatednesses is empty.")
+        return [], []
+
     strings, relatednesses = zip(*strings_and_relatednesses)
     return strings[:top_n], relatednesses[:top_n]
+
 
 
 def num_tokens(text: str, model: str = GPT_MODEL) -> int:
@@ -257,7 +264,7 @@ def query_message(
     """Return a message for GPT, with relevant source texts pulled from a dataframe."""
     strings, relatednesses = strings_ranked_by_relatedness(query, project_id, df)
     introduction = 'Use the emails and attachments below. If the answer cannot be found in the emails or attachments, explain why not and what the closest answer would be.'
-    question = f"\n\nQuestion: {query}"
+    question = f"\n\nQuestion is about the {Project.query.get_or_404(project_id).name} project: {query}"
     message = introduction
     company_name = Project.query.get_or_404(project_id).name
     for string in strings:
@@ -308,11 +315,41 @@ def ask(
     # Extract the response message
     response_message = response["choices"][0]["message"]["content"]
 
+    # Try to find a document relevant to the response
+    document = get_relevant_document(response_message, project_id)
+    if document is not None:
+        path, filename = os.path.split(document.content)
+        document_link = url_for('dashboard_bp.serve_file', path=path, filename=filename)
+        response_message += f' You can view the related document at <a href="{document_link}">{filename}</a>.'
+
+
+    # Try to find an email relevant to the response
+    email = get_relevant_email(response_message, project_id)
+    if email is not None:
+        email_link = url_for('dashboard_bp.email', email_id=email.id)
+        response_message += f' You can view the related email at <a href="{email_link}">email thread</a>.'
+
     # Add the model's response to the conversation
     conversation.add_model_message(response_message)
 
     print(response_message)
     return response_message
+
+
+def get_relevant_document(message, project_id):
+    documents = Document.query.filter_by(project_id=project_id).all()
+    for document in documents:
+        if document.name.lower() in message.lower():
+            return document
+    return None
+
+
+def get_relevant_email(message, project_id):
+    emails = Email.query.filter_by(project_id=project_id).all()
+    for email in emails:
+        if email.snippet.lower() in message.lower():
+            return email
+    return None
 
 
 
@@ -359,7 +396,6 @@ def scrape(project_id, project_domain):
         query = f"to:{domain} OR from:{domain}"
         if latest_email_date_str:
             query += f" after:{latest_email_date_str}"
-
 
         emails = []
         result = service.users().messages().list(userId='me', q=query).execute()

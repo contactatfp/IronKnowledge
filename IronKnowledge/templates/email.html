@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="container">
+        <h1>{{ email.subject }}</h1>
+        <h2>Date: {{ email.date_of_email }}</h2>
+        <br>
+        <p>{{ email.snippet|safe }}</p>
+
+    </div>
+{% endblock %}
