@@ -323,7 +323,6 @@ def sanitize_filename(filename):
 
 
 def scrape(project_id, project_domain):
-    global latest_email_date_str
     local_folder = 'attachments'
     latest_email_date = (
         db.session.query(func.max(Email.date_of_email))
@@ -334,7 +333,8 @@ def scrape(project_id, project_domain):
     if latest_email_date is not None:
         latest_email_date = latest_email_date.astimezone(timezone.utc)
         latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
-
+    else:
+        latest_email_date_str = ""
 
     if not os.path.exists(local_folder):
         os.makedirs(local_folder)
