@@ -1,7 +1,8 @@
 from __future__ import print_function
 import pandas as pd
 import tiktoken
-from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify, current_app, send_file, send_from_directory
+from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify, current_app, send_file, \
+    send_from_directory
 from flask_bootstrap import Bootstrap
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
@@ -22,10 +23,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from models import User, Project, db, Email, Document
-from datetime import datetime
+from datetime import datetime, timezone
 from dateutil.parser import parse
-
-
+from sqlalchemy import func
+from conversation import Conversation
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -278,7 +279,6 @@ def ask(
         token_budget: int = 4096 - 500,
         print_message: bool = False,
 ) -> str:
-    """Answers a query using GPT and a dataframe of relevant texts and embeddings."""
     emails = get_all_emails()
     data = [{
         "email": email.subject + " " + email.snippet,
@@ -292,19 +292,29 @@ def ask(
     if print_message:
         print(message)
 
-    company_name = Project.query.get_or_404(project_id).name
-    messages = [
-        {"role": "system", "content": f"You answer questions about the ${company_name}."},
-        {"role": "user", "content": message},
-    ]
+    # Initialize the conversation when the session begins
+    conversation = Conversation(project_id)
+
+    # Add the user's message to the conversation
+    conversation.add_user_message(message)
+
+    # Generate the model's response
     response = openai.ChatCompletion.create(
         model=model,
-        messages=messages,
+        messages=list(conversation.messages),  # Convert deque to list before passing to the API
         temperature=0
     )
+
+    # Extract the response message
     response_message = response["choices"][0]["message"]["content"]
+
+    # Add the model's response to the conversation
+    conversation.add_model_message(response_message)
+
     print(response_message)
     return response_message
+
+
 
 def sanitize_filename(filename):
     filename = filename.strip()  # Remove leading/trailing spaces
@@ -313,7 +323,19 @@ def sanitize_filename(filename):
 
 
 def scrape(project_id, project_domain):
+    global latest_email_date_str
     local_folder = 'attachments'
+    latest_email_date = (
+        db.session.query(func.max(Email.date_of_email))
+        .filter(Email.project_id == project_id)
+        .scalar()
+    )
+
+    if latest_email_date is not None:
+        latest_email_date = latest_email_date.astimezone(timezone.utc)
+        latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
+
+
     if not os.path.exists(local_folder):
         os.makedirs(local_folder)
 
@@ -335,6 +357,10 @@ def scrape(project_id, project_domain):
         domain = project_domain
 
         query = f"to:{domain} OR from:{domain}"
+        if latest_email_date_str:
+            query += f" after:{latest_email_date_str}"
+
+
         emails = []
         result = service.users().messages().list(userId='me', q=query).execute()
         messages = result.get('messages', [])
@@ -377,9 +403,9 @@ def scrape(project_id, project_domain):
         for email in emails:
             headers = email['payload']['headers']
             snippet = email['snippet']
-            subject = next((h['value'] for h in headers if h['name'] == 'Subject'),None)
-            sender = next((h['value'] for h in headers if h['name'] == 'From'),None)
-            to = next((h['value'] for h in headers if h['name'] == 'To'),None)
+            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), None)
+            sender = next((h['value'] for h in headers if h['name'] == 'From'), None)
+            to = next((h['value'] for h in headers if h['name'] == 'To'), None)
             date = next(h['value'] for h in headers if h['name'] == 'Date')
 
             modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
