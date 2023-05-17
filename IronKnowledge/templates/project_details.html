@@ -4,7 +4,11 @@
     <div class="container">
         <div class="d-flex justify-content-between align-items-center">
             <h1>Project Details</h1>
-            <button id="refresh-button" class="btn btn-info pr-10">Refresh</button>
+            <button id="refresh-button" class="btn btn-info pr-10">
+                <span id="refresh-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+                Refresh Model
+            </button>
+
         </div>
         <p>Name: {{ project.name }}</p>
         <p>Summary: {{ project.summary }}</p>
@@ -26,7 +30,6 @@
                     <td>{{ document.created_at }}</td>
                     <td>
                         <a href="{{ url_for('dashboard_bp.document', document_id=document.id) }}" class="btn btn-primary">View</a>
-                        <a href="{{ url_for('dashboard_bp.edit_document', document_id=document.id) }}" class="btn btn-secondary">Edit</a>
                     </td>
                 </tr>
             {% endfor %}
@@ -40,6 +43,9 @@
             const projectId = '{{ project.id }}'; // Get the project id from the Jinja2 variable
             const projectDomain = '{{ project.company_domain }}'; // Get the project domain from the Jinja2 variable
 
+            // Show the spinner
+            document.getElementById("refresh-spinner").style.display = "inline-block";
+
             fetch(`/refresh_emails?project_id=${projectId}&project_domain=${projectDomain}`, { // Include the project id and project domain as URL parameters
                 method: 'POST',
                 headers: {
@@ -47,9 +53,22 @@
                 },
                 credentials: 'same-origin'
             })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    // Hide the spinner when the data has been fetched
+                    document.getElementById("refresh-spinner").style.display = "none";
+
+                    // Refresh the page
+                    location.reload();
+                })
                 .catch(error => {
                     console.error('Error fetching emails:', error);
+                    // Hide the spinner if there was an error
+                    document.getElementById("refresh-spinner").style.display = "none";
                 });
         });
     </script>
+
 {% endblock %}

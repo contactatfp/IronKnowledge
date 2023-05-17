@@ -1,7 +1,8 @@
 from __future__ import print_function
 import pandas as pd
 import tiktoken
-from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify, current_app, send_file
+from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify, current_app, send_file, \
+    send_from_directory
 from flask_bootstrap import Bootstrap
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
@@ -21,8 +22,11 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from models import User, Project, db, Email
-from datetime import datetime
+from models import User, Project, db, Email, Document
+from datetime import datetime, timezone
+from dateutil.parser import parse
+from sqlalchemy import func
+from conversation import Conversation
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -31,6 +35,7 @@ app.app_context().push()
 app.config.from_object(Config)
 bootstrap = Bootstrap(app)
 db.init_app(app)
+db.create_all()
 migrate = Migrate(app, db)
 login = LoginManager(app)
 login.login_view = 'login'
@@ -39,6 +44,7 @@ app.app_context().push()
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
 GPT_MODEL = "gpt-3.5-turbo"
+# GPT_MODEL = "gpt-4"
 
 with open('config.json') as f:
     config = json.load(f)
@@ -47,15 +53,10 @@ openai.api_key = config['api_secret']
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-emails = Email.query.all()
 
-data = [{
-    "email": email.subject + " " + email.snippet,
-    "embedding": email.embedding,
-    "project_id": email.project_id,
-} for email in emails]
 
-df = pd.DataFrame(data)
+def get_all_emails():
+    return Email.query.all()
 
 
 @login.user_loader
@@ -66,6 +67,7 @@ def load_user(id):
 @app.route('/')
 def index():
     if current_user.is_authenticated:
+        load_user(current_user.id)
         return redirect(url_for('dashboard_bp.dashboard_main'))
     return render_template('index.html')
 
@@ -94,6 +96,7 @@ def extract_text_from_docx(file_path):
     text = docx2txt.process(file_path)
 
     return text
+
 
 @app.route('/refresh_emails', methods=['POST'])
 @login_required
@@ -157,14 +160,14 @@ def chat():
         return jsonify({"error": "User input is empty"}), 400
 
     # try:
-        # trainedAsk = embedTrain.ask(user_input)
+    # trainedAsk = embedTrain.ask(user_input)
     trainedAsk = ask(project_id, user_input)
-        # completion = openai.ChatCompletion.create(
-        #     model="gpt-3.5-turbo",
-        #     messages=[{"role": "user", "content": user_input}]
-        # )
-        #
-        # assistant_message = completion.choices[0].message.content
+    # completion = openai.ChatCompletion.create(
+    #     model="gpt-3.5-turbo",
+    #     messages=[{"role": "user", "content": user_input}]
+    # )
+    #
+    # assistant_message = completion.choices[0].message.content
     return jsonify({"assistant_message": trainedAsk})
 
     # except Exception as e:
@@ -272,33 +275,67 @@ def query_message(
 def ask(
         project_id: int,
         query: str,
-        df: pd.DataFrame = df,
         model: str = GPT_MODEL,
         token_budget: int = 4096 - 500,
         print_message: bool = False,
 ) -> str:
-    """Answers a query using GPT and a dataframe of relevant texts and embeddings."""
+    emails = get_all_emails()
+    data = [{
+        "email": email.subject + " " + email.snippet,
+        "embedding": email.embedding,
+        "project_id": email.project_id,
+    } for email in emails]
+
+    df = pd.DataFrame(data)
+
     message = query_message(project_id, query, df, model=model, token_budget=token_budget)
     if print_message:
         print(message)
 
-    company_name = Project.query.get_or_404(project_id).name
-    messages = [
-        {"role": "system", "content": f"You answer questions about the ${company_name}."},
-        {"role": "user", "content": message},
-    ]
+    # Initialize the conversation when the session begins
+    conversation = Conversation(project_id)
+
+    # Add the user's message to the conversation
+    conversation.add_user_message(message)
+
+    # Generate the model's response
     response = openai.ChatCompletion.create(
         model=model,
-        messages=messages,
+        messages=list(conversation.messages),  # Convert deque to list before passing to the API
         temperature=0
     )
+
+    # Extract the response message
     response_message = response["choices"][0]["message"]["content"]
+
+    # Add the model's response to the conversation
+    conversation.add_model_message(response_message)
+
     print(response_message)
     return response_message
 
 
+
+def sanitize_filename(filename):
+    filename = filename.strip()  # Remove leading/trailing spaces
+    filename = filename.replace(' ', '_')  # Replace spaces with underscores
+    return filename
+
+
 def scrape(project_id, project_domain):
     local_folder = 'attachments'
+    latest_email_date = (
+        db.session.query(func.max(Email.date_of_email))
+        .filter(Email.project_id == project_id)
+        .scalar()
+    )
+
+    if latest_email_date is not None:
+        latest_email_date = latest_email_date.astimezone(timezone.utc)
+        latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
+    else:
+        latest_email_date_str = ""
+
     if not os.path.exists(local_folder):
         os.makedirs(local_folder)
 
@@ -320,6 +357,10 @@ def scrape(project_id, project_domain):
         domain = project_domain
 
         query = f"to:{domain} OR from:{domain}"
+        if latest_email_date_str:
+            query += f" after:{latest_email_date_str}"
+
+
         emails = []
         result = service.users().messages().list(userId='me', q=query).execute()
         messages = result.get('messages', [])
@@ -336,11 +377,19 @@ def scrape(project_id, project_domain):
                     ).execute()
                     data = attachment.get('data')
                     file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
-                    file_name = part.get('filename')
+                    file_name = sanitize_filename(part.get('filename'))  # Sanitize the filename
 
                     with open(os.path.join(local_folder, file_name), 'wb') as local_file:
                         local_file.write(file_data)
                         attachments.append({'file_path': local_file.name, 'file_name': file_name})
+
+                        new_document = Document(
+                            name=file_name,
+                            content=local_file.name,  # store the file path
+                            project_id=project_id,
+                        )
+                        db.session.add(new_document)
+            db.session.commit()
 
             msg['attachments'] = attachments
             emails.append(msg)
@@ -354,9 +403,9 @@ def scrape(project_id, project_domain):
         for email in emails:
             headers = email['payload']['headers']
             snippet = email['snippet']
-            subject = next(h['value'] for h in headers if h['name'] == 'Subject')
-            sender = next(h['value'] for h in headers if h['name'] == 'From')
-            to = next(h['value'] for h in headers if h['name'] == 'To')
+            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), None)
+            sender = next((h['value'] for h in headers if h['name'] == 'From'), None)
+            to = next((h['value'] for h in headers if h['name'] == 'To'), None)
             date = next(h['value'] for h in headers if h['name'] == 'Date')
 
             modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
@@ -429,8 +478,9 @@ def scrape_and_store_emails(project_id, project_domain):
             for email, embedding in zip(email_data, email_embeddings):
                 date_str = email[
                     'date_of_email']  # Assuming email['date_of_email'] is a string in the format 'Mon, 24 Apr 2023 16:16:58 -0500'
-                date_obj = datetime.strptime(date_str, "%a, %d %b %Y %H:%M:%S %z")
-                # date_formatted = date_obj.strftime("%Y-%m-%d %H:%M:%S.%f")
+                # date_obj = datetime.strptime(date_str, "%a, %d %b %Y %H:%M:%S %z")
+                # convert date_str to python datetime object
+                date_obj = parse(date_str)
                 new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
                                   date_of_email=date_obj, project_id=project_id)
                 db.session.add(new_email)

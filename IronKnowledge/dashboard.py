@@ -1,6 +1,7 @@
 import io
+import os
 from os import abort
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import current_user
 
 from models import Project, db, Document
@@ -22,6 +23,15 @@ def project_details(project_id):
         abort(403)
     return render_template('project_details.html', project=project, domain=project_domain)
 
+@dashboard_bp.route('/document/<int:document_id>')
+def document(document_id):
+    document = Document.query.get_or_404(document_id)
+    path, filename = os.path.split(document.content)
+    return render_template("document.html", path=path, filename=filename)
+
+@dashboard_bp.route('/<path:path>/<filename>')
+def serve_file(path, filename):
+    return send_from_directory('attachments/', filename)
 
 @dashboard_bp.route('/dashboard/<project_id>')
 def dashboard_project(project_id):
@@ -117,13 +127,13 @@ def add_document(project_id):
     return render_template('add_document.html', project=project, project_id=project_id)
 
 
-@dashboard_bp.route('/dashboard/document/<int:document_id>', methods=['GET'])
-def document(document_id):
-    document = Document.query.get_or_404(document_id)
-    project = Project.query.get_or_404(document.project_id)
-    if project.user_id != current_user.id:
-        abort(403)
-    return render_template('document.html', document=document)
+# @dashboard_bp.route('/dashboard/document/<int:document_id>', methods=['GET'])
+# def document(document_id):
+#     document = Document.query.get_or_404(document_id)
+#     project = Project.query.get_or_404(document.project_id)
+#     if project.user_id != current_user.id:
+#         abort(403)
+#     return render_template('document.html', document=document)
 
 
 @dashboard_bp.route('/dashboard/edit_document/<int:document_id>', methods=['GET', 'POST'])
