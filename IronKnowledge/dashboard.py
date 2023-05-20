@@ -38,6 +38,15 @@ def email(email_id):
     email = Email.query.get_or_404(email_id)
     return render_template("email.html", email=email)
 
+# route for all project documents. takes in project id and returns all documents for that project
+@dashboard_bp.route('/dashboard/<int:project_id>/documents', methods=['GET'])
+def project_documents(project_id):
+    project = Project.query.get_or_404(project_id)
+    if project.user_id != current_user.id:
+        abort(403)
+    documents = Document.query.filter_by(project_id=project_id).all()
+    return render_template('project_documents.html', project=project, documents=documents)
+
 
 @dashboard_bp.route('/dashboard/<project_id>')
 def dashboard_project(project_id):

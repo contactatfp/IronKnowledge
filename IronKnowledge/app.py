@@ -278,6 +278,13 @@ def query_message(
             message += next_article
     return message + question
 
+# route that renders the project_documents.html page
+@app.route('/project/<int:project_id>/documents', methods=['GET'])
+@login_required
+def project_documents(project_id):
+    project = Project.query.get_or_404(project_id)
+    return render_template('project_documents.html', project=project)
+
 
 def ask(
         project_id: int,
