@@ -45,8 +45,8 @@ app.app_context().push()
 
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
-GPT_MODEL = "gpt-3.5-turbo"
-# GPT_MODEL = "gpt-4"
+# GPT_MODEL = "gpt-3.5-turbo"
+GPT_MODEL = "gpt-4"
 
 with open('config.json') as f:
     config = json.load(f)
@@ -121,7 +121,7 @@ def refresh_emails():
             db.session.commit()
         # if the project summary for this project is empty, then call def project_summary(project_id)
     if not Project.query.filter_by(id=project_id).first().summary:
-        user_input = "Write out a detailed summary about every you know about this."
+        user_input = "Write out a detailed summary about everything you know about this. Write it out in bullet point format."
         trainedAsk = ask(int(project_id), user_input)
         Project.query.filter_by(id=project_id).first().summary = trainedAsk
         db.session.commit()

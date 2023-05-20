@@ -11,7 +11,7 @@
 
         </div>
         <p>Name: {{ project.name }}</p>
-        <p>Summary: {{ project.summary }}</p>
+        <p>Summary: {{ project.summary | replace('\n', '<br>') | safe }}</p>
         <p>Created at: {{ project.created_at }}</p>
         <p>Version: {{ project.version }}</p>
         <h2>Documents</h2>

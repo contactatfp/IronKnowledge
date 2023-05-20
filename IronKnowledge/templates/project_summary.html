@@ -12,7 +12,7 @@
         </div>
 
         <h2>Project Summary</h2>
-        <p id="summary">{{ project.summary }}</p>
+        <p id="summary">{{ project.summary | replace('\n', '<br>') | safe }}</p>
 
 
         <div id="popup" class="popup" style="display: none;">
@@ -65,7 +65,7 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ project_id: '{{ project.id }}', user_input: 'Provided a detailed summary of the project in bullet format.' })
+                body: JSON.stringify({ project_id: '{{ project.id }}', user_input: 'Write out a detailed summary about everything you know about this. Write it out in bullet point format.' })
             })
                 .then(response => response.json())
                 .then(data => {
