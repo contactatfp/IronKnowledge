@@ -4,20 +4,28 @@
     <div class="container">
         <div class="d-flex justify-content-between align-items-center">
             <h1>{{ project.name }}</h1>
-            <button onclick="openPopup()" class="btn btn-primary">Update Summary</button>
+            <button id="update-button" onclick="openPopup()" class="btn btn-primary">
+                Update Summary
+                <span id="update-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+            </button>
+
         </div>
 
         <h2>Project Summary</h2>
         <p id="summary">{{ project.summary }}</p>
 
+
         <div id="popup" class="popup" style="display: none;">
-            <form id="update-summary-form" method="POST">  <!-- Give the form an ID -->
+            <form id="update-summary-form" method="POST">
                 <label for="updated-summary">Updated Summary:</label>
                 <textarea id="updated-summary" name="updated_summary" class="form-control"></textarea>
                 <button type="submit" class="btn btn-primary">Confirm</button>
                 <button type="button" class="btn btn-secondary" onclick="cancelUpdate()">Cancel</button>
             </form>
         </div>
+
+
+
     </div>
 
     <script>
@@ -50,9 +58,8 @@
         });
 
         function openPopup() {
-            document.getElementById("popup").style.display = "block";
+            document.getElementById("update-spinner").style.display = "inline-block"; // Show the spinner
 
-            // Make a request to the '/ask' route to get the updated summary
             fetch('/ask', {
                 method: 'POST',
                 headers: {
@@ -64,15 +71,24 @@
                 .then(data => {
                     const updatedSummary = data.updated_summary;
                     document.getElementById("updated-summary").value = updatedSummary;
+
+                    document.getElementById("update-spinner").style.display = "none"; // Hide the spinner
+                    document.getElementById("popup").style.display = "block"; // Show the popup
                 })
                 .catch(error => {
                     console.error('Error:', error);
+                    document.getElementById("update-spinner").style.display = "none"; // Hide the spinner
                 });
         }
 
         function cancelUpdate() {
             document.getElementById("popup").style.display = "none";
+            document.getElementById("update-spinner").style.display = "none";
         }
+
+
+
+
     </script>
 
 {% endblock %}

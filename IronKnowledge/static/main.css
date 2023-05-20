@@ -116,3 +116,22 @@ body {
     background-color: white;
     border-radius: 20px;
 }
+
+ #send-button {
+     background-color: rgba(255, 255, 255, 0);
+     border: none;
+     color: #007bff;
+     position: absolute;
+     right: 10px;
+     top: 2px;
+     transform: scale(1.2);
+ }
+#send-button:focus {
+    outline: none;
+}
+
+.fixed-bottom {
+    max-width: 80%;
+    width: auto;
+    margin: 0 auto;
+}

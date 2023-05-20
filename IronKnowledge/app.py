@@ -1,34 +1,34 @@
 from __future__ import print_function
-import pandas as pd
-import tiktoken
-from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify, current_app, send_file, \
-    send_from_directory
-from flask_bootstrap import Bootstrap
-from flask_migrate import Migrate
-from flask_login import LoginManager, current_user, login_user, logout_user, login_required
-from scipy import spatial
-import fitz
 
-import project
-from config import Config
-from forms import LoginForm, RegistrationForm, UpdateSettingsForm
-from dashboard import dashboard_bp
-import docx2txt
 import base64
-from flask import current_app
 import json
 import os.path
+from datetime import timezone
+
+import docx2txt
+import fitz
 import openai
+import pandas as pd
+import tiktoken
+from dateutil.parser import parse
+from flask import Flask, render_template, url_for, redirect, flash, request, jsonify
+from flask import current_app
+from flask_bootstrap import Bootstrap
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
+from flask_migrate import Migrate
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from models import User, Project, db, Email, Document
-from datetime import datetime, timezone
-from dateutil.parser import parse
+from scipy import spatial
 from sqlalchemy import func
+
+from config import Config
 from conversation import Conversation
+from dashboard import dashboard_bp
+from forms import LoginForm, RegistrationForm, UpdateSettingsForm
+from models import User, Project, db, Email, Document
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
