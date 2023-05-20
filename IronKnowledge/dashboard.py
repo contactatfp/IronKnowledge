@@ -3,6 +3,7 @@ import os
 from os import abort
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_login import current_user
+from sqlalchemy import func
 
 from models import Project, db, Document, Email
 
@@ -38,6 +39,36 @@ def email(email_id):
     email = Email.query.get_or_404(email_id)
     return render_template("email.html", email=email)
 
+# route for all project documents. takes in project id and returns all documents for that project
+@dashboard_bp.route('/dashboard/<int:project_id>/documents', methods=['GET'])
+def project_documents(project_id):
+    project = Project.query.get_or_404(project_id)
+    if project.user_id != current_user.id:
+        abort(403)
+    documents = Document.query.filter_by(project_id=project_id).all()
+    return render_template('project_documents.html', project=project, documents=documents)
+
+@dashboard_bp.route('/project/<int:project_id>/summary', methods=['GET', 'POST'])
+def project_summary(project_id):
+    project = Project.query.get_or_404(project_id)
+    if request.method == 'POST':
+        data = request.get_json()
+        action = data.get('action')  # Get the action from the request
+
+        # Check the action type
+        if action == 'update_summary':
+            my_summary = data.get('updated_summary')
+            print(my_summary)
+            project.summary = my_summary
+            db.session.commit()
+            return redirect(url_for('dashboard_bp.project_summary', project_id=project.id))
+
+    start_date = db.session.query(func.min(Email.date_of_email)).filter_by(project_id=project.id).first()
+    project.start_date = start_date[0] if start_date else None
+
+    return render_template('project_summary.html', project=project)
+
+
 
 @dashboard_bp.route('/dashboard/<project_id>')
 def dashboard_project(project_id):
@@ -51,23 +82,23 @@ def dashboard_project(project_id):
     return render_template('dashboard.html', project=project, version_history=version_history)
 
 
-@dashboard_bp.route('/dashboard/update/<project_id>', methods=['POST'])
-def update_summary(project_id):
-    from summarizer import save_summary
-    from version_control import create_version
-
-    action = request.form.get('action')
-    updated_summary = request.form.get('summary')
-
-    if action == 'approve':
-        save_summary(project_id, updated_summary)
-        create_version(project_id)
-    elif action == 'adjust':
-        save_summary(project_id, updated_summary)
-    elif action == 'delete':
-        save_summary(project_id, '')
-
-    return redirect(url_for('dashboard_bp.dashboard_project', project_id=project_id))
+# @dashboard_bp.route('/dashboard/update/<project_id>', methods=['POST'])
+# def update_summary(project_id):
+#     from summarizer import save_summary
+#     from version_control import create_version
+#
+#     action = request.form.get('action')
+#     updated_summary = request.form.get('summary')
+#
+#     if action == 'approve':
+#         save_summary(project_id, updated_summary)
+#         create_version(project_id)
+#     elif action == 'adjust':
+#         save_summary(project_id, updated_summary)
+#     elif action == 'delete':
+#         save_summary(project_id, '')
+#
+#     return redirect(url_for('dashboard_bp.dashboard_project', project_id=project_id))
 
 
 @dashboard_bp.route('/dashboard/add', methods=['GET', 'POST'])

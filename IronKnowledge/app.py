@@ -1,34 +1,34 @@
 from __future__ import print_function
-import pandas as pd
-import tiktoken
-from flask import Flask, render_template, url_for, redirect, flash, request, Blueprint, jsonify, current_app, send_file, \
-    send_from_directory
-from flask_bootstrap import Bootstrap
-from flask_migrate import Migrate
-from flask_login import LoginManager, current_user, login_user, logout_user, login_required
-from scipy import spatial
-import fitz
 
-import project
-from config import Config
-from forms import LoginForm, RegistrationForm, UpdateSettingsForm
-from dashboard import dashboard_bp
-import docx2txt
 import base64
-from flask import current_app
 import json
 import os.path
+from datetime import timezone
+
+import docx2txt
+import fitz
 import openai
+import pandas as pd
+import tiktoken
+from dateutil.parser import parse
+from flask import Flask, render_template, url_for, redirect, flash, request, jsonify
+from flask import current_app
+from flask_bootstrap import Bootstrap
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
+from flask_migrate import Migrate
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from models import User, Project, db, Email, Document
-from datetime import datetime, timezone
-from dateutil.parser import parse
+from scipy import spatial
 from sqlalchemy import func
+
+from config import Config
 from conversation import Conversation
+from dashboard import dashboard_bp
+from forms import LoginForm, RegistrationForm, UpdateSettingsForm
+from models import User, Project, db, Email, Document
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -72,12 +72,6 @@ def index():
         load_user(current_user.id)
         return redirect(url_for('dashboard_bp.dashboard_main'))
     return render_template('index.html')
-
-
-# @app.route('/refresh_model')
-# @login_required
-# def refresh_model():
-#     return render_template('refresh_model.html')
 
 
 def extract_text_from_pdf(file_path):
@@ -125,6 +119,12 @@ def refresh_emails():
                     db.session.add(new_attachment)
 
             db.session.commit()
+        # if the project summary for this project is empty, then call def project_summary(project_id)
+    if not Project.query.filter_by(id=project_id).first().summary:
+        user_input = "Write out a detailed summary about every you know about this."
+        trainedAsk = ask(int(project_id), user_input)
+        Project.query.filter_by(id=project_id).first().summary = trainedAsk
+        db.session.commit()
 
         return jsonify({"email_data": email_data})
     else:
@@ -209,8 +209,6 @@ def settings():
     return render_template('settings.html', form=form)
 
 
-
-
 # EMBED API
 # search function
 def strings_ranked_by_relatedness(
@@ -247,7 +245,6 @@ def strings_ranked_by_relatedness(
     return strings[:top_n], relatednesses[:top_n]
 
 
-
 def num_tokens(text: str, model: str = GPT_MODEL) -> int:
     """Return the number of tokens in a string."""
     encoding = tiktoken.encoding_for_model(model)
@@ -277,6 +274,24 @@ def query_message(
         else:
             message += next_article
     return message + question
+
+
+# route that renders the project_documents.html page
+@app.route('/project/<int:project_id>/documents', methods=['GET'])
+@login_required
+def project_documents(project_id):
+    project = Project.query.get_or_404(project_id)
+    return render_template('project_documents.html', project=project)
+
+
+@app.route('/ask', methods=['POST'])
+def ask_route():
+    data = request.json
+    project_id = data.get('project_id')
+    user_input = data.get('user_input')
+    updated_summary = ask(project_id, user_input)
+
+    return jsonify({'updated_summary': updated_summary})
 
 
 def ask(
@@ -322,7 +337,6 @@ def ask(
         document_link = url_for('dashboard_bp.serve_file', path=path, filename=filename)
         response_message += f' You can view the related document at <a href="{document_link}">{filename}</a>.'
 
-
     # Try to find an email relevant to the response
     email = get_relevant_email(response_message, project_id)
     if email is not None:
@@ -350,7 +364,6 @@ def get_relevant_email(message, project_id):
         if email.snippet.lower() in message.lower():
             return email
     return None
-
 
 
 def sanitize_filename(filename):
