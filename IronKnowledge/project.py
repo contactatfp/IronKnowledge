@@ -1,4 +1,4 @@
-from app import db
+
 
 # Import your Project model here
 # from models import Project

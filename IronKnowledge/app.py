@@ -209,8 +209,6 @@ def settings():
     return render_template('settings.html', form=form)
 
 
-
-
 # EMBED API
 # search function
 def strings_ranked_by_relatedness(
@@ -247,7 +245,6 @@ def strings_ranked_by_relatedness(
     return strings[:top_n], relatednesses[:top_n]
 
 
-
 def num_tokens(text: str, model: str = GPT_MODEL) -> int:
     """Return the number of tokens in a string."""
     encoding = tiktoken.encoding_for_model(model)
@@ -278,12 +275,23 @@ def query_message(
             message += next_article
     return message + question
 
+
 # route that renders the project_documents.html page
 @app.route('/project/<int:project_id>/documents', methods=['GET'])
 @login_required
 def project_documents(project_id):
     project = Project.query.get_or_404(project_id)
     return render_template('project_documents.html', project=project)
+
+
+@app.route('/ask', methods=['POST'])
+def ask_route():
+    data = request.json
+    project_id = data.get('project_id')
+    user_input = data.get('user_input')
+    updated_summary = ask(project_id, user_input)
+
+    return jsonify({'updated_summary': updated_summary})
 
 
 def ask(
@@ -329,7 +337,6 @@ def ask(
         document_link = url_for('dashboard_bp.serve_file', path=path, filename=filename)
         response_message += f' You can view the related document at <a href="{document_link}">{filename}</a>.'
 
-
     # Try to find an email relevant to the response
     email = get_relevant_email(response_message, project_id)
     if email is not None:
@@ -357,7 +364,6 @@ def get_relevant_email(message, project_id):
         if email.snippet.lower() in message.lower():
             return email
     return None
-
 
 
 def sanitize_filename(filename):

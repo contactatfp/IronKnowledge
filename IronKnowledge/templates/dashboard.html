@@ -19,7 +19,7 @@
                                 <a href="{{ url_for('dashboard_bp.project_documents', project_id=project.id) }}" class="btn btn-link text-decoration-none btn-bold"><i class="fas fa-dochub fa-1x"></i>Documents</a> <!-- Replaced "dashboard_bp.delete_project" with "project_documents" and changed "fa-1x" to "fa-2x" and added "btn-bold" class -->
                             </div>
                             <div class="mt-2"> <!-- Added margin top -->
-                                <a href="#" class="btn btn-link text-dark text-decoration-none mr-2 btn-bold"><i class="fas fa-list-ul fa-1x"></i> Summary</a> <!-- Changed icon order and added "Summary" text and "btn-bold" class -->
+                                <a href="{{ url_for('dashboard_bp.project_summary', project_id=project.id) }}" class="btn btn-link text-dark text-decoration-none mr-2 btn-bold"><i class="fas fa-list-ul fa-1x"></i> Summary</a> <!-- Changed icon order and added "Summary" text and "btn-bold" class -->
                                 <a href="#" class="btn btn-link text-dark text-decoration-none btn-bold"><i class="fas fa-stream fa-1x"></i> Timeline</a> <!-- Changed icon order and added "Timeline" text and "btn-bold" class -->
                             </div>
                         </div>
