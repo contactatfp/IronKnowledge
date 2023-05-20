@@ -74,12 +74,6 @@ def index():
     return render_template('index.html')
 
 
-# @app.route('/refresh_model')
-# @login_required
-# def refresh_model():
-#     return render_template('refresh_model.html')
-
-
 def extract_text_from_pdf(file_path):
     if not file_path.endswith('.pdf'):
         return None
@@ -125,6 +119,12 @@ def refresh_emails():
                     db.session.add(new_attachment)
 
             db.session.commit()
+        # if the project summary for this project is empty, then call def project_summary(project_id)
+    if not Project.query.filter_by(id=project_id).first().summary:
+        user_input = "Write out a detailed summary about every you know about this."
+        trainedAsk = ask(int(project_id), user_input)
+        Project.query.filter_by(id=project_id).first().summary = trainedAsk
+        db.session.commit()
 
         return jsonify({"email_data": email_data})
     else:
