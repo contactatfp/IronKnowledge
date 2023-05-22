@@ -3,6 +3,7 @@ from __future__ import print_function
 import base64
 import json
 import os.path
+from collections import OrderedDict
 from datetime import timezone
 
 import docx2txt
@@ -29,6 +30,9 @@ from conversation import Conversation
 from dashboard import dashboard_bp
 from forms import LoginForm, RegistrationForm, UpdateSettingsForm
 from models import User, Project, db, Email, Document
+import plotly
+import plotly.graph_objects as go
+import json
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -72,6 +76,41 @@ def index():
         load_user(current_user.id)
         return redirect(url_for('dashboard_bp.dashboard_main'))
     return render_template('index.html')
+
+
+@app.route('/timeline', methods=['GET', 'POST'])
+def timeline():
+    project_id = request.args.get('project_id')  # Get the project_id from the URL query parameters
+
+    # Get first 10 email entries for the project using the project_id
+    database_entries = Email.query.filter_by(project_id=project_id).limit(10).all()
+
+
+
+    # Extract dates and snippets from the database entries
+    dates = [entry.date_of_email for entry in database_entries]
+    subjects = list(OrderedDict.fromkeys(entry.subject for entry in database_entries))
+
+    # Convert the dates to datetime objects
+    fig = go.Figure(data=[go.Scatter(
+        x=[1]*len(dates), y=dates,
+        mode='markers+text',
+        text=subjects,
+        textposition='middle right',
+        marker=dict(
+            size=10,
+            color='LightSkyBlue',
+            line=dict(
+                color='MediumPurple',
+                width=2
+            )
+        ))])
+
+    fig.update_yaxes(type='category')
+    fig.update_layout(yaxis=dict(autorange="reversed"))
+
+    plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    return render_template('timeline.html', plot=plot_json)
 
 
 def extract_text_from_pdf(file_path):
