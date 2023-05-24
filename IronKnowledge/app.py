@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import base64
-import json
+import pinecone
 import os.path
 from collections import OrderedDict
 from datetime import timezone
@@ -47,10 +47,14 @@ login = LoginManager(app)
 login.login_view = 'login'
 app.app_context().push()
 
+pinecone.init(api_key="c1416615-953e-4ec5-8da0-adb555601e4b")
+# pinecone.create_index(index_name="my-index", dimension=512, metric="cosine")  # Assuming you have 512D embeddings
+index = pinecone.Index(index_name="ironmind")
+
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
-# GPT_MODEL = "gpt-3.5-turbo"
-GPT_MODEL = "gpt-4"
+GPT_MODEL = "gpt-3.5-turbo"
+# GPT_MODEL = "gpt-4"
 
 with open('config.json') as f:
     config = json.load(f)
@@ -532,13 +536,6 @@ def generate_email_embeddings(email_data):
         # Check if 'attachments' key exists in the email dictionary
         if 'attachments' in email:
             for attachment in email['attachments']:
-                # try:
-                #     with open(attachment['file_path'], "r", encoding='utf-8') as file:
-                #         file_content = file.read()
-                #     texts.append(f"{attachment['file_name']}\n\n{file_content}")  # Add attachments
-                # except UnicodeDecodeError:
-                #     print(f"Attempting to process non-text attachment: {attachment['file_name']}")
-
                 extracted_text = None
                 if attachment['file_name'].endswith('.pdf'):
                     extracted_text = extract_text_from_pdf(attachment['file_path'])
@@ -566,18 +563,12 @@ def scrape_and_store_emails(project_id, project_domain):
             for email, embedding in zip(email_data, email_embeddings):
                 date_str = email[
                     'date_of_email']  # Assuming email['date_of_email'] is a string in the format 'Mon, 24 Apr 2023 16:16:58 -0500'
-                # date_obj = datetime.strptime(date_str, "%a, %d %b %Y %H:%M:%S %z")
                 # convert date_str to python datetime object
                 date_obj = parse(date_str)
                 new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
                                   date_of_email=date_obj, project_id=project_id)
                 db.session.add(new_email)
-                #
-                # for attachment in email['attachments']:
-                #     with open(attachment['file_path'], "r") as file:
-                #         file_content = file.read()
-                #     new_attachment = Email(subject=attachment['file_name'], snippet=file_content, embedding=embedding)
-                #     db.session.add(new_attachment)
+
             db.session.commit()
 
     else:
