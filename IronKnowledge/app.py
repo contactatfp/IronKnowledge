@@ -4,7 +4,7 @@ import base64
 import pinecone
 import os.path
 from collections import OrderedDict
-from datetime import timezone
+from datetime import timezone, datetime
 
 import docx2txt
 import fitz
@@ -47,9 +47,8 @@ login = LoginManager(app)
 login.login_view = 'login'
 app.app_context().push()
 
-pinecone.init(api_key="c1416615-953e-4ec5-8da0-adb555601e4b")
-# pinecone.create_index(index_name="my-index", dimension=512, metric="cosine")  # Assuming you have 512D embeddings
-index = pinecone.Index(index_name="ironmind")
+
+
 
 # models
 EMBEDDING_MODEL = "text-embedding-ada-002"
@@ -58,6 +57,9 @@ GPT_MODEL = "gpt-3.5-turbo"
 
 with open('config.json') as f:
     config = json.load(f)
+
+pinecone.init(api_key=config['pinecone-api-key'], environment=config['pinecone-environment'])
+pinecone_index = pinecone.Index(index_name="ironmind")
 
 openai.api_key = config['api_secret']
 
@@ -89,15 +91,13 @@ def timeline():
     # Get first 10 email entries for the project using the project_id
     database_entries = Email.query.filter_by(project_id=project_id).limit(10).all()
 
-
-
     # Extract dates and snippets from the database entries
     dates = [entry.date_of_email for entry in database_entries]
     subjects = list(OrderedDict.fromkeys(entry.subject for entry in database_entries))
 
     # Convert the dates to datetime objects
     fig = go.Figure(data=[go.Scatter(
-        x=[1]*len(dates), y=dates,
+        x=[1] * len(dates), y=dates,
         mode='markers+text',
         text=subjects,
         textposition='middle right',
@@ -204,20 +204,10 @@ def chat():
     if not user_input:
         return jsonify({"error": "User input is empty"}), 400
 
-    # try:
-    # trainedAsk = embedTrain.ask(user_input)
     trainedAsk = ask(project_id, user_input)
-    # completion = openai.ChatCompletion.create(
-    #     model="gpt-3.5-turbo",
-    #     messages=[{"role": "user", "content": user_input}]
-    # )
-    #
-    # assistant_message = completion.choices[0].message.content
-    print("Assistant message:", trainedAsk)
+
     return jsonify({"assistant_message": trainedAsk})
 
-    # except Exception as e:
-    #     return jsonify({"error": str(e)}), 500
 
 
 @app.route('/project/<int:project_id>/chat', methods=['GET'])
@@ -304,7 +294,7 @@ def query_message(
     """Return a message for GPT, with relevant source texts pulled from a dataframe."""
     strings, relatednesses = strings_ranked_by_relatedness(query, project_id, df)
     introduction = 'Use the emails and attachments below. If the answer cannot be found in the emails or attachments, explain why not and what the closest answer would be.'
-    question = f"\n\nQuestion is about the {Project.query.get_or_404(project_id).name} project: {query}"
+    question = f"\n\nYou are now an expert on the {Project.query.get_or_404(project_id).name} project: {query}"
     message = introduction
     company_name = Project.query.get_or_404(project_id).name
     for string in strings:
@@ -341,7 +331,7 @@ def ask(
         project_id: int,
         query: str,
         model: str = GPT_MODEL,
-        token_budget: int = 4096 - 500,
+        token_budget: int = 4097 - 500,
         print_message: bool = False,
 ) -> str:
     emails = get_all_emails()
@@ -357,6 +347,45 @@ def ask(
     if print_message:
         print(message)
 
+    # vector_namespace = Project.query.get_or_404(project_id).name
+    # res = openai.Embedding.create(
+    #     input=[query],
+    #     engine=EMBEDDING_MODEL
+    # )
+    #
+    # # retrieve from Pinecone
+    # xq = res['data'][0]['embedding']
+    # # get relevant contexts (including the questions)
+    # res = pinecone_index.query(namespace=vector_namespace, top_k=10, include_metadata=True, include_values=False, vector=xq)
+    # contexts = [
+    #     # get snippet from metadata in x for x in res['matches'] but not if its a datetime object
+    #     x['metadata']['snippet'] for x in res['matches']
+    #
+    # ]
+    #
+    # prompt_start = (
+    #         "Answer the question based on the context below.\n\n"+
+    #         "Context:\n"
+    # )
+    # prompt_end = (
+    #     f"\n\nQuestion: {query}\nAnswer:"
+    # )
+    #
+    # for i in range(1, len(contexts)):
+    #     if len("\n\n---\n\n".join(contexts[:i])) >= token_budget:
+    #         prompt = (
+    #                 prompt_start +
+    #                 "\n\n---\n\n".join(contexts[:i-1]) +
+    #                 prompt_end
+    #         )
+    #         break
+    #     elif i == len(contexts)-1:
+    #         prompt = (
+    #                 prompt_start +
+    #                 "\n\n---\n\n".join(contexts) +
+    #                 prompt_end
+    #         )
+
     # Initialize the conversation when the session begins
     conversation = Conversation(project_id)
 
@@ -366,8 +395,8 @@ def ask(
     # Generate the model's response
     response = openai.ChatCompletion.create(
         model=model,
-        messages=list(conversation.messages),  # Convert deque to list before passing to the API
-        temperature=0
+        messages=list(conversation.messages),  # change to prmopt if using pinecone
+        temperature=1
     )
 
     # Extract the response message
@@ -546,9 +575,12 @@ def generate_email_embeddings(email_data):
                     texts.append(f"{attachment['file_name']}\n\n{extracted_text}")
 
     embeddings = []
+
     for text in texts:
         response = openai.Embedding.create(model="text-embedding-ada-002", input=text)
-        embeddings.append(response["data"][0]["embedding"])
+        # embeddings.append(response["data"][0]["embedding"])
+        embedding_values = list(response['data'][0]['embedding'])
+        embeddings.append(embedding_values)
 
     return embeddings
 
@@ -558,9 +590,12 @@ def scrape_and_store_emails(project_id, project_domain):
 
     if email_data:
         email_embeddings = generate_email_embeddings(email_data)
+        vector_namespace = Project.query.get_or_404(project_id).name
 
         with current_app.app_context():
+            count = 0
             for email, embedding in zip(email_data, email_embeddings):
+                count += 1
                 date_str = email[
                     'date_of_email']  # Assuming email['date_of_email'] is a string in the format 'Mon, 24 Apr 2023 16:16:58 -0500'
                 # convert date_str to python datetime object
@@ -568,6 +603,18 @@ def scrape_and_store_emails(project_id, project_domain):
                 new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
                                   date_of_email=date_obj, project_id=project_id)
                 db.session.add(new_email)
+
+                # vector_id is vector_namespace + count as a string
+                vector_id = vector_namespace + str(count)
+
+                # make date_of_email a string
+                date_of_email_str = date_obj.strftime("%Y-%m-%d %H:%M:%S")
+
+                # create vector for pinecone index
+                vectors = [{'id': vector_id, 'values': embedding, 'metadata':{'snippet': email['snippet'], 'subject': email['subject'], 'date_of_email': date_of_email_str}}]
+
+                # Upsert embeddings to Pinecone index
+                pinecone_index.upsert(vectors=vectors, namespace=vector_namespace)
 
             db.session.commit()
 
