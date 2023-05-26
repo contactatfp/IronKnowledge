@@ -1,10 +1,12 @@
 from __future__ import print_function
-
+from flask_caching import Cache
 import base64
 import pinecone
 import os.path
 from collections import OrderedDict
 from datetime import timezone, datetime
+from scipy.spatial import distance
+import numpy as np
 
 import docx2txt
 import fitz
@@ -34,6 +36,14 @@ import plotly
 import plotly.graph_objects as go
 import json
 
+from langchain.vectorstores import Pinecone
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.chat_models import ChatOpenAI
+from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+from langchain.chains import RetrievalQA
+from langchain.agents import Tool
+from langchain.agents import initialize_agent
+
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
 
@@ -46,17 +56,21 @@ migrate = Migrate(app, db)
 login = LoginManager(app)
 login.login_view = 'login'
 app.app_context().push()
-
-
+cache = Cache(app,config={'CACHE_TYPE': 'SimpleCache'})
 
 
 # models
-EMBEDDING_MODEL = "text-embedding-ada-002"
-GPT_MODEL = "gpt-3.5-turbo"
-# GPT_MODEL = "gpt-4"
+EMBEDDING_MODEL = Config.EMBEDDING_MODEL
+GPT_MODEL = Config.GPT_MODEL
+# GPT_MODEL = Config.GPT_MODEL
 
 with open('config.json') as f:
     config = json.load(f)
+
+embed = OpenAIEmbeddings(
+    model=EMBEDDING_MODEL,
+    openai_api_key=config['api_secret']
+)
 
 pinecone.init(api_key=config['pinecone-api-key'], environment=config['pinecone-environment'])
 pinecone_index = pinecone.Index(index_name="ironmind")
@@ -64,7 +78,7 @@ pinecone_index = pinecone.Index(index_name="ironmind")
 openai.api_key = config['api_secret']
 
 # If modifying these scopes, delete the file token.json.
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+SCOPES = Config.GMAIL_SCOPES
 
 
 def get_all_emails():
@@ -205,8 +219,10 @@ def chat():
         return jsonify({"error": "User input is empty"}), 400
 
     trainedAsk = ask(project_id, user_input)
+    trainedAsk_html = trainedAsk.replace('\n', '<br/>')
+    trainedAsk_html = trainedAsk_html.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
 
-    return jsonify({"assistant_message": trainedAsk})
+    return jsonify({"assistant_message": trainedAsk_html})
 
 
 
@@ -244,27 +260,33 @@ def settings():
 
 # EMBED API
 # search function
+
 def strings_ranked_by_relatedness(
         query: str,
         project_id: int,
-        df: pd.DataFrame,
-        relatedness_fn=lambda x, y: 1 - spatial.distance.cosine(x, y),
         top_n: int = 100
 ) -> tuple[list[str], list[float]]:
     """Returns a list of strings and relatednesses, sorted from most related to least."""
-    df = df[df['project_id'] == project_id]
+    df = get_emails_dataframe(project_id)
     print(f"Dataframe size after filtering by project_id: {df.shape}")
 
     query_embedding_response = openai.Embedding.create(
         model=EMBEDDING_MODEL,
         input=query,
     )
-    query_embedding = query_embedding_response["data"][0]["embedding"]
+    query_embedding = np.array(query_embedding_response["data"][0]["embedding"])
 
-    strings_and_relatednesses = [
-        (row["email"], relatedness_fn(query_embedding, row["embedding"]))  # Change 'text' to 'email' here
-        for i, row in df.iterrows()
-    ]
+    # Convert list of embeddings to a 2D array
+    embeddings_array = np.vstack(df["embedding"].values)
+
+    # Calculate cosine distances in a vectorized way
+    cosine_distances = distance.cdist([query_embedding], embeddings_array, 'cosine')[0]
+
+    # Compute relatedness as 1 - cosine distance
+    relatednesses = 1 - cosine_distances
+
+    # Create tuples of (email, relatedness)
+    strings_and_relatednesses = list(zip(df["email"], relatednesses))
 
     print(f"Number of strings and relatednesses: {len(strings_and_relatednesses)}")
 
@@ -278,6 +300,7 @@ def strings_ranked_by_relatedness(
     return strings[:top_n], relatednesses[:top_n]
 
 
+
 def num_tokens(text: str, model: str = GPT_MODEL) -> int:
     """Return the number of tokens in a string."""
     encoding = tiktoken.encoding_for_model(model)
@@ -287,12 +310,11 @@ def num_tokens(text: str, model: str = GPT_MODEL) -> int:
 def query_message(
         project_id: int,
         query: str,
-        df: pd.DataFrame,
         model: str,
         token_budget: int
 ) -> str:
     """Return a message for GPT, with relevant source texts pulled from a dataframe."""
-    strings, relatednesses = strings_ranked_by_relatedness(query, project_id, df)
+    strings, relatednesses = strings_ranked_by_relatedness(query, project_id)
     introduction = 'Use the emails and attachments below. If the answer cannot be found in the emails or attachments, explain why not and what the closest answer would be.'
     question = f"\n\nYou are now an expert on the {Project.query.get_or_404(project_id).name} project: {query}"
     message = introduction
@@ -326,6 +348,37 @@ def ask_route():
 
     return jsonify({'updated_summary': updated_summary})
 
+    # chat completion llm
+# llm = ChatOpenAI(
+#         openai_api_key=config['api_secret'],
+#         model_name=GPT_MODEL,
+#         temperature=0.0,
+#         max_tokens=3000,
+# )
+#     # conversational memory
+# conversational_memory = ConversationBufferWindowMemory(
+#         memory_key='chat_history',
+#         k=5,
+#         return_messages=True
+#
+# )
+
+def get_emails_dataframe(project_id):
+    emails_cache_key = f"emails_{project_id}"
+    df = cache.get(emails_cache_key)
+
+    if df is None:
+        emails = Email.query.filter_by(project_id=project_id).all()
+        data = [{
+            "email": email.subject + " " + email.snippet,
+            "embedding": email.embedding,
+            "project_id": email.project_id,
+        } for email in emails]
+
+        df = pd.DataFrame(data)
+        cache.set(emails_cache_key, df)
+
+    return df
 
 def ask(
         project_id: int,
@@ -334,19 +387,50 @@ def ask(
         token_budget: int = 4097 - 500,
         print_message: bool = False,
 ) -> str:
-    emails = get_all_emails()
-    data = [{
-        "email": email.subject + " " + email.snippet,
-        "embedding": email.embedding,
-        "project_id": email.project_id,
-    } for email in emails]
 
-    df = pd.DataFrame(data)
+    # get all emails from the project
 
-    message = query_message(project_id, query, df, model=model, token_budget=token_budget)
+    message = query_message(project_id, query, model=model, token_budget=token_budget)
     if print_message:
         print(message)
 
+    # ******************* LANGCHAIN *******************
+    # text_field = 'snippet'
+    # vector_namespace = Project.query.get_or_404(project_id).name
+    # vectorstore = Pinecone(
+    #     pinecone_index, embed.embed_query, text_field, namespace=vector_namespace,
+    # )
+    #
+    # # retrieval qa chain
+    # qa = RetrievalQA.from_chain_type(
+    #     llm=llm,
+    #     chain_type="stuff",
+    #     retriever=vectorstore.as_retriever()
+    # )
+    #
+    # tools = [
+    #     Tool(
+    #         name='Knowledge Base',
+    #         func=qa.run,
+    #         description=(
+    #             f'You are answering questions about the ${Project.query.get_or_404(project_id).name} '
+    #             'Answer based on the documents you have.'
+    #         )
+    #     )
+    # ]
+    # agent = initialize_agent(
+    #     agent='chat-conversational-react-description',
+    #     tools=tools,
+    #     llm=llm,
+    #     verbose=True,
+    #     max_iterations=3,
+    #     early_stopping_method='generate',
+    #     memory=conversational_memory
+    # )
+    #
+    # message = agent(query)
+
+# ******************* PINECONE *******************
     # vector_namespace = Project.query.get_or_404(project_id).name
     # res = openai.Embedding.create(
     #     input=[query],
@@ -400,7 +484,8 @@ def ask(
     )
 
     # Extract the response message
-    response_message = response["choices"][0]["message"]["content"]
+    response_message = response['choices'][0]['message']['content']
+
 
     # Try to find a document relevant to the response
     document = get_relevant_document(response_message, project_id)
