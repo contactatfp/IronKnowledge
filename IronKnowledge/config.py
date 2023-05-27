@@ -13,3 +13,7 @@ class Config(object):
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'your-mail-username-here'
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'your-mail-password-here'
     ADMINS = ['kyle@example.com']
+    GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+    EMBEDDING_MODEL = "text-embedding-ada-002"
+    GPT_MODEL = "gpt-3.5-turbo"
+    # GPT_MODEL = "gpt-4"

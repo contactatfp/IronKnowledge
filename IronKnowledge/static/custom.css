@@ -1,0 +1,79 @@
+/* Override common Bootstrap CSS */
+.navbar {
+    background-color: #232C3C !important;
+    color: #F9F9F9 !important;
+}
+
+.navbar a:hover {
+    color: #92A9B3 !important;
+}
+
+#send-button {
+    background-color: rgba(255, 255, 255, 0) !important;
+
+}
+
+
+
+.btn {
+    background-color: #F9F9F9 !important;
+    border-color: #F9F9F9 !important;
+    color: #232C3C !important;
+    transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.btn-primary {
+    background-color: #b0260e !important;
+    /*border-color: #92A9B3 !important;*/
+    color: #F9F9F9 !important;
+}
+
+.btn:hover {
+    background-color: #92A9B3 !important;
+    border-color: #92A9B3 !important;
+    color: #F9F9F9 !important;
+}
+
+.btn-bold i {
+    background-image: linear-gradient(to right, #92A9B3 50%, #DA3E4F 50%) !important;
+}
+
+.btn-bold:hover i,
+.btn-bold:hover a {
+    color: #232C3C !important;
+    background-position: -100% 0 !important;
+}
+
+.btn-bold:active i {
+    color: #F9F9F9 !important;
+}
+
+.btn-black {
+    color: #232C3C !important;
+}
+
+.card {
+    background-color: #F9F9F9 !important;
+    border-color: #F9F9F9 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.card-title a {
+    color: #232C3C !important;
+    text-decoration: none;
+}
+
+.card-title a:hover {
+    color: #232C3C !important;
+}
+
+.fixed-bottom {
+    max-width: 80% !important;
+    width: auto !important;
+    margin: 0 auto !important;
+}

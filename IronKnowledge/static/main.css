@@ -28,6 +28,11 @@
     /*color: #ffffff;*/
 }
 
+.navbar a {
+    color: #ffffff;
+    text-decoration: none;
+}
+
 .navbar a:hover {
     color: #ffffff;
 }
@@ -73,7 +78,7 @@ body {
     left: 0;
     bottom: -2px; /* adjust this as per your requirements */
     width: 100%;
-    height: 2px; /* adjust this as per your requirements */
+    height: 0px; /* adjust this as per your requirements */
     background: black;
     transform: scaleX(0);
     transform-origin: left;
@@ -128,6 +133,7 @@ body {
  }
 #send-button:focus {
     outline: none;
+    color: #ffffff;
 }
 
 .fixed-bottom {
