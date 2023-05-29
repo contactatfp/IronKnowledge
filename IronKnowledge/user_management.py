@@ -1,18 +1,19 @@
 from project import get_project_details, update_project_details
 
 
-def add_user_to_project(user_id, project_id):
-    project = get_project_details(project_id)
-    if project and user_id not in project['users']:
-        project['users'].append(user_id)
-        update_project_details(project_id, project)
+def add_user_to_project(user, project):
+    # if user is an email address, then email user inviting them to register
+    if '@' in user:
+        print('Email user to invite them to register')
+    if user not in project.users:
+        project.users.append(user)
+        db.session.commit()
 
 
-def remove_user_from_project(user_id, project_id):
-    project = get_project_details(project_id)
-    if project and user_id in project['users']:
-        project['users'].remove(user_id)
-        update_project_details(project_id, project)
+def remove_user_from_project(user, project):
+    if user in project.users:
+        project.users.remove(user)
+        db.session.commit()
 
 
 def get_user_permissions(user_id, project_id):
