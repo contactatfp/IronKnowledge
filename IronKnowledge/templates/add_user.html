@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card mt-5">
+                <div class="card-body">
+                    <h1 class="text-center mb-4">Register</h1>
+                    <form action="{{ url_for('add_user') }}" method="post">
+                        {{ form.hidden_tag() }}
+                        <input type="hidden" name="project_id" value="{{ request.args.get('project_id') }}">
+                        <div class="form-group">
+                            <label for="{{ form.email.id }}">Email</label>
+                            {{ form.email(class="form-control", id=form.email.id) }}
+                        </div>
+{#                        <div class="form-group">#}
+{#                            <label for="{{ form.password.id }}">Password</label>#}
+{#                            {{ form.password(class="form-control", id=form.password.id) }}#}
+{#                        </div>#}
+{#                        <div class="form-group">#}
+{#                            <label for="{{ form.password2.id }}">Confirm Password</label>#}
+{#                            {{ form.password2(class="form-control", id=form.password2.id) }}#}
+{#                        </div>#}
+                        <button type="submit" class="btn btn-primary btn-block mt-4">Add User</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

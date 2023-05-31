@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from flask import copy_current_request_context
+from flask import copy_current_request_context, abort
 from concurrent.futures import ThreadPoolExecutor
 from flask_caching import Cache
 import base64
@@ -52,19 +52,6 @@ from langchain.chains import RetrievalQA
 from langchain.agents import Tool
 from langchain.agents import initialize_agent
 from dashboard import dashboard_bp
-
-
-# app = Flask(__name__)
-# app.register_blueprint(dashboard_bp)
-#
-# app.app_context().push()
-# app.config.from_object(Config)
-# bootstrap = Bootstrap(app)
-# db.init_app(app)
-# db.create_all()
-# migrate = Migrate(app, db)
-
-# app.app_context().push()
 
 
 def create_app():
@@ -140,18 +127,7 @@ def add_user():
             invitation = Invitation(email=form.email.data, project_id=project_id)
             db.session.add(invitation)
             db.session.commit()
-            send_invitation_email(invitation, project.name)  # You also need to pass the project name here
-
-        # add user to project with project_id
-        # project = Project.query.get_or_404(project_id)
-        # project.users.append(user)
-        # db.session.commit()
-
-        # Send an invitation to the new user if they are not in the system yet.
-        # invitation = Invitation(email=form.email.data, project_id=project_id)
-        # db.session.add(invitation)
-        # db.session.commit()
-        # send_invitation_email(form.email.data, project.name)
+            send_invitation_email(invitation, project.name)
 
         flash('Congratulations, you added a new user!')
         return redirect(url_for('dashboard_bp.dashboard_main'))
@@ -234,39 +210,6 @@ def index():
         load_user(current_user.id)
         return redirect(url_for('dashboard_bp.dashboard_main'))
     return render_template('index.html')
-
-
-@app.route('/timeline', methods=['GET', 'POST'])
-def timeline():
-    project_id = request.args.get('project_id')  # Get the project_id from the URL query parameters
-
-    # Get first 10 email entries for the project using the project_id
-    database_entries = Email.query.filter_by(project_id=project_id).limit(10).all()
-
-    # Extract dates and snippets from the database entries
-    dates = [entry.date_of_email for entry in database_entries]
-    subjects = list(OrderedDict.fromkeys(entry.subject for entry in database_entries))
-
-    # Convert the dates to datetime objects
-    fig = go.Figure(data=[go.Scatter(
-        x=[1] * len(dates), y=dates,
-        mode='markers+text',
-        text=subjects,
-        textposition='middle right',
-        marker=dict(
-            size=10,
-            color='LightSkyBlue',
-            line=dict(
-                color='MediumPurple',
-                width=2
-            )
-        ))])
-
-    fig.update_yaxes(type='category')
-    fig.update_layout(yaxis=dict(autorange="reversed"))
-
-    plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-    return render_template('timeline.html', plot=plot_json)
 
 
 def extract_text_from_pdf(file_path):
@@ -929,6 +872,18 @@ def generate_email_embeddings(email_data):
             embeddings.append(embedding_values)
 
         return embeddings
+
+
+@app.route('/project/<int:project_id>/members')
+def project_members(project_id):
+    project = Project.query.get(project_id)
+    # users are all the members of this project in project.users table
+    users = User.query.join(Project.users).filter(Project.id == project_id).all()
+    invitations = Invitation.query.filter_by(project_id=project_id).all()
+
+    if project is None:
+        abort(404)  # Not found
+    return render_template('members.html', project=project, users=users, invitations=invitations)
 
 
 def scrape_and_store_emails(project_id, project_domain):

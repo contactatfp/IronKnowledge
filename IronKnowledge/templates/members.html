@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="container">
+        <a href="{{ url_for('add_user', project_id=project.id) }}" class="btn btn-primary" style="float: right">Add User</a>
+        <h1>{{ project.name }}</h1>
+        <h2>Members</h2>
+        <ul class="list-group mb-3">
+            {% for user in users %}
+                <li class="list-group-item">{{ user.email }}</li>
+            {% endfor %}
+        </ul>
+
+        <ul class="list-group mb-3">
+            {% for invitation in invitations %}
+                <li class="list-group-item list-group-item-secondary">{{ invitation.email }} (Pending)</li>
+            {% endfor %}
+        </ul>
+
+    </div>
+{% endblock %}
