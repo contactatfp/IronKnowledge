@@ -1,5 +1,5 @@
 from project import get_project_details, update_project_details
-
+from models import db
 
 def add_user_to_project(user, project):
     # if user is an email address, then email user inviting them to register

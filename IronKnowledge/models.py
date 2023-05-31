@@ -69,3 +69,12 @@ class Attachment(db.Model):
 
     def __repr__(self):
         return f"<Attachment {self.file_name}>"
+
+
+class Invitation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Invitation to {self.email} for project {self.project_id}>'

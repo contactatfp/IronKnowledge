@@ -8,6 +8,9 @@ import pinecone
 import os.path
 from collections import OrderedDict
 from datetime import timezone, datetime
+
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, serializer
 from scipy.spatial import distance
 import numpy as np
 
@@ -29,12 +32,14 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from scipy import spatial
 from sqlalchemy import func
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 from config import Config
 from conversation import Conversation
 from dashboard import dashboard_bp
-from forms import LoginForm, RegistrationForm, UpdateSettingsForm
-from models import User, Project, db, Email, Document
+from forms import LoginForm, RegistrationForm, UpdateSettingsForm, NewUserForm
+from models import User, Project, db, Email, Document, Invitation
 import plotly
 import plotly.graph_objects as go
 import json
@@ -46,27 +51,62 @@ from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.chains import RetrievalQA
 from langchain.agents import Tool
 from langchain.agents import initialize_agent
+from dashboard import dashboard_bp
 
-app = Flask(__name__)
-app.register_blueprint(dashboard_bp)
 
-app.app_context().push()
-app.config.from_object(Config)
-bootstrap = Bootstrap(app)
-db.init_app(app)
-db.create_all()
-migrate = Migrate(app, db)
+# app = Flask(__name__)
+# app.register_blueprint(dashboard_bp)
+#
+# app.app_context().push()
+# app.config.from_object(Config)
+# bootstrap = Bootstrap(app)
+# db.init_app(app)
+# db.create_all()
+# migrate = Migrate(app, db)
+
+# app.app_context().push()
+
+
+def create_app():
+    app = Flask(__name__)
+    app.register_blueprint(dashboard_bp)
+
+    app.config.from_object(Config)
+
+    Bootstrap(app)
+
+    db.init_app(app)
+
+    migrate = Migrate(app, db)
+
+    cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
+
+    with app.app_context():
+        db.create_all()
+
+    return app
+
+
+with open('config.json') as f:
+    config = json.load(f)
+
+app = create_app()
 login = LoginManager(app)
 login.login_view = 'login'
-app.app_context().push()
 cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
+
+app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USERNAME'] = 'apikey'
+app.config['MAIL_PASSWORD'] = config['send-grid-api']
+
+mail = Mail(app)
 
 # models
 EMBEDDING_MODEL = Config.EMBEDDING_MODEL
 GPT_MODEL = Config.GPT_MODEL
-
-with open('config.json') as f:
-    config = json.load(f)
 
 embed = OpenAIEmbeddings(
     model=EMBEDDING_MODEL,
@@ -80,6 +120,103 @@ openai.api_key = config['api_secret']
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = Config.GMAIL_SCOPES
+
+
+@app.route('/add_user', methods=['GET', 'POST'])
+def add_user():
+    form = NewUserForm()
+    if form.validate_on_submit():
+        # Check if user already exists in the database
+        project_id = request.form.get('project_id')
+        user = User.query.filter_by(email=form.email.data).first()
+        project = Project.query.get_or_404(project_id)
+        if user is not None:
+            # add user to project with project_id
+            project = Project.query.get_or_404(project_id)
+            project.users.append(user)
+            db.session.commit()
+        else:
+            # Send an invitation to the new user if they are not in the system yet.
+            invitation = Invitation(email=form.email.data, project_id=project_id)
+            db.session.add(invitation)
+            db.session.commit()
+            send_invitation_email(invitation, project.name)  # You also need to pass the project name here
+
+        # add user to project with project_id
+        # project = Project.query.get_or_404(project_id)
+        # project.users.append(user)
+        # db.session.commit()
+
+        # Send an invitation to the new user if they are not in the system yet.
+        # invitation = Invitation(email=form.email.data, project_id=project_id)
+        # db.session.add(invitation)
+        # db.session.commit()
+        # send_invitation_email(form.email.data, project.name)
+
+        flash('Congratulations, you added a new user!')
+        return redirect(url_for('dashboard_bp.dashboard_main'))
+    print(form.errors)
+    return render_template('add_user.html', form=form)
+
+
+def generate_invitation_token(email, project_id):
+    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    return serializer.dumps((email, project_id), salt=app.config['SECURITY_PASSWORD_SALT'])
+
+
+def send_invitation_email(invitation, project_name):
+    project_id = Project.query.filter_by(name=project_name).first().id
+    token = generate_invitation_token(invitation.email, project_id)
+
+    message = Mail(
+        from_email='contact@fakepicasso.com',
+        to_emails=[invitation.email],
+        subject=f'''You have been added to {project_name}''',
+        html_content=f'''You have been invited to join the project {project_name}.
+        Please click on the following link to accept the invitation:
+        {url_for('accept_invitation', token=token, _external=True)}
+        ''')
+    try:
+        sg = SendGridAPIClient(config['send-grid-api'])
+        response = sg.send(message)
+        print(response.status_code)
+        print(response.body)
+        print(response.headers)
+    except Exception as e:
+        print(e.message)
+
+
+def verify_invitation_token(token):
+    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    try:
+        email, project_id = serializer.loads(
+            token,
+            salt=app.config['SECURITY_PASSWORD_SALT'],
+            max_age=3600
+        )
+    except:
+        return False
+    return email, project_id
+
+
+@app.route('/accept_invitation/<token>')
+def accept_invitation(token):
+    result = verify_invitation_token(
+        token)  # Function to verify the token and get the invitation id. You need to implement this.
+    if not result:
+        flash('That is an invalid or expired token')
+        return redirect(url_for('index'))
+
+    # Unpack the email and project_id
+    email, project_id = result
+
+    invitation = Invitation.query.filter_by(email=email, project_id=project_id).first()
+    if invitation is None:
+        flash('Invalid invitation')
+        return redirect(url_for('index'))
+
+    # Redirect the user to the registration page with the token as a parameter
+    return redirect(url_for('register', token=token))
 
 
 def get_all_emails():
@@ -220,10 +357,35 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     form = RegistrationForm()
+    token = request.args.get('token')
+    if token is not None:
+        result = verify_invitation_token(token)
+        if not result:
+            flash('Invalid or expired token')
+            return redirect(url_for('index'))
+        # Unpack the email and project_id
+        email, project_id = result
+
+        # Pre-populate email field
+        form.email.data = email
+        form.token.data = token
+        form.project_id.data = project_id
+    email = form.email.data
+
     if form.validate_on_submit():
+        # get token from url
+        token = form.token.data
+        project_id = form.project_id.data
         user = User(email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
+        if token is not None:
+            # If there's an invitation, add user to the project and delete the invitation
+            invitation = Invitation.query.filter_by(email=email, project_id=project_id).first()
+            if invitation is not None:
+                project = Project.query.get_or_404(invitation.project_id)
+                project.users.append(user)
+                db.session.delete(invitation)
         db.session.commit()
         flash('Congratulations, you are now a registered user!')
         return redirect(url_for('login'))
@@ -328,6 +490,7 @@ def ask_route():
     updated_summary = ask(project_id, user_input)
 
     return jsonify({'updated_summary': updated_summary})
+
 
 # chat completion llm
 # llm = ChatOpenAI(
@@ -767,6 +930,7 @@ def generate_email_embeddings(email_data):
 
         return embeddings
 
+
 def scrape_and_store_emails(project_id, project_domain):
     @copy_current_request_context
     def scrape_with_context():
@@ -804,9 +968,6 @@ def scrape_and_store_emails(project_id, project_domain):
             db.session.commit()
 
             # pinecone_index.upsert(vectors=vectors, namespace=vector_namespace)
-
-
-
 
 
 if __name__ == '__main__':
