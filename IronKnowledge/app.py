@@ -1,10 +1,16 @@
 from __future__ import print_function
+
+from flask import copy_current_request_context, abort
+from concurrent.futures import ThreadPoolExecutor
 from flask_caching import Cache
 import base64
 import pinecone
 import os.path
 from collections import OrderedDict
 from datetime import timezone, datetime
+
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, serializer
 from scipy.spatial import distance
 import numpy as np
 
@@ -26,12 +32,14 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from scipy import spatial
 from sqlalchemy import func
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 from config import Config
 from conversation import Conversation
 from dashboard import dashboard_bp
-from forms import LoginForm, RegistrationForm, UpdateSettingsForm
-from models import User, Project, db, Email, Document
+from forms import LoginForm, RegistrationForm, UpdateSettingsForm, NewUserForm
+from models import User, Project, db, Email, Document, Invitation
 import plotly
 import plotly.graph_objects as go
 import json
@@ -43,29 +51,49 @@ from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.chains import RetrievalQA
 from langchain.agents import Tool
 from langchain.agents import initialize_agent
+from dashboard import dashboard_bp
 
-app = Flask(__name__)
-app.register_blueprint(dashboard_bp)
 
-app.app_context().push()
-app.config.from_object(Config)
-bootstrap = Bootstrap(app)
-db.init_app(app)
-db.create_all()
-migrate = Migrate(app, db)
+def create_app():
+    app = Flask(__name__)
+    app.register_blueprint(dashboard_bp)
+
+    app.config.from_object(Config)
+
+    Bootstrap(app)
+
+    db.init_app(app)
+
+    migrate = Migrate(app, db)
+
+    cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
+
+    with app.app_context():
+        db.create_all()
+
+    return app
+
+
+with open('config.json') as f:
+    config = json.load(f)
+
+app = create_app()
 login = LoginManager(app)
 login.login_view = 'login'
-app.app_context().push()
-cache = Cache(app,config={'CACHE_TYPE': 'SimpleCache'})
+cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
 
+app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USERNAME'] = 'apikey'
+app.config['MAIL_PASSWORD'] = config['send-grid-api']
+
+mail = Mail(app)
 
 # models
 EMBEDDING_MODEL = Config.EMBEDDING_MODEL
 GPT_MODEL = Config.GPT_MODEL
-# GPT_MODEL = Config.GPT_MODEL
-
-with open('config.json') as f:
-    config = json.load(f)
 
 embed = OpenAIEmbeddings(
     model=EMBEDDING_MODEL,
@@ -79,6 +107,93 @@ openai.api_key = config['api_secret']
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = Config.GMAIL_SCOPES
+
+
+@app.route('/add_user', methods=['GET', 'POST'])
+def add_user():
+    form = NewUserForm()
+    project_ids = request.args.get('project_id')
+    project = Project.query.get_or_404(project_ids)
+    if form.validate_on_submit():
+        # Check if user already exists in the database
+        project_id = request.form.get('project_id')
+        user = User.query.filter_by(email=form.email.data).first()
+        project = Project.query.get_or_404(project_id)
+        if user is not None:
+            # add user to project with project_id
+            project = Project.query.get_or_404(project_id)
+            project.users.append(user)
+            db.session.commit()
+        else:
+            # Send an invitation to the new user if they are not in the system yet.
+            invitation = Invitation(email=form.email.data, project_id=project_id)
+            db.session.add(invitation)
+            db.session.commit()
+            send_invitation_email(invitation, project.name)
+
+        flash('Congratulations, you added a new user!')
+        return redirect(url_for('dashboard_bp.dashboard_main'))
+    return render_template('add_user.html', form=form, project=project)
+
+
+def generate_invitation_token(email, project_id):
+    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    return serializer.dumps((email, project_id), salt=app.config['SECURITY_PASSWORD_SALT'])
+
+
+def send_invitation_email(invitation, project_name):
+    project_id = Project.query.filter_by(name=project_name).first().id
+    token = generate_invitation_token(invitation.email, project_id)
+
+    message = Mail(
+        from_email='contact@fakepicasso.com',
+        to_emails=[invitation.email],
+        subject=f'''You have been added to {project_name}''',
+        html_content=f'''You have been invited to join the project {project_name}.
+        Please click on the following link to accept the invitation:
+        {url_for('accept_invitation', token=token, _external=True)}
+        ''')
+    try:
+        sg = SendGridAPIClient(config['send-grid-api'])
+        response = sg.send(message)
+        print(response.status_code)
+        print(response.body)
+        print(response.headers)
+    except Exception as e:
+        print(e.message)
+
+
+def verify_invitation_token(token):
+    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    try:
+        email, project_id = serializer.loads(
+            token,
+            salt=app.config['SECURITY_PASSWORD_SALT'],
+            max_age=3600
+        )
+    except:
+        return False
+    return email, project_id
+
+
+@app.route('/accept_invitation/<token>')
+def accept_invitation(token):
+    result = verify_invitation_token(
+        token)  # Function to verify the token and get the invitation id. You need to implement this.
+    if not result:
+        flash('That is an invalid or expired token')
+        return redirect(url_for('index'))
+
+    # Unpack the email and project_id
+    email, project_id = result
+
+    invitation = Invitation.query.filter_by(email=email, project_id=project_id).first()
+    if invitation is None:
+        flash('Invalid invitation')
+        return redirect(url_for('index'))
+
+    # Redirect the user to the registration page with the token as a parameter
+    return redirect(url_for('register', token=token))
 
 
 def get_all_emails():
@@ -96,39 +211,6 @@ def index():
         load_user(current_user.id)
         return redirect(url_for('dashboard_bp.dashboard_main'))
     return render_template('index.html')
-
-
-@app.route('/timeline', methods=['GET', 'POST'])
-def timeline():
-    project_id = request.args.get('project_id')  # Get the project_id from the URL query parameters
-
-    # Get first 10 email entries for the project using the project_id
-    database_entries = Email.query.filter_by(project_id=project_id).limit(10).all()
-
-    # Extract dates and snippets from the database entries
-    dates = [entry.date_of_email for entry in database_entries]
-    subjects = list(OrderedDict.fromkeys(entry.subject for entry in database_entries))
-
-    # Convert the dates to datetime objects
-    fig = go.Figure(data=[go.Scatter(
-        x=[1] * len(dates), y=dates,
-        mode='markers+text',
-        text=subjects,
-        textposition='middle right',
-        marker=dict(
-            size=10,
-            color='LightSkyBlue',
-            line=dict(
-                color='MediumPurple',
-                width=2
-            )
-        ))])
-
-    fig.update_yaxes(type='category')
-    fig.update_layout(yaxis=dict(autorange="reversed"))
-
-    plot_json = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-    return render_template('timeline.html', plot=plot_json)
 
 
 def extract_text_from_pdf(file_path):
@@ -157,26 +239,8 @@ def refresh_emails():
     project_id = request.args.get('project_id')  # Get the project id from the URL parameters
     project_domain = request.args.get('project_domain')  # Get the project domain from the URL parameters
     email_data = scrape_and_store_emails(project_id, project_domain)
-    if email_data:
-        # Generate embeddings for emails and attachments
-        embeddings = generate_email_embeddings(email_data)
 
-        # Save emails and attachments data in the database
-        with current_app.app_context():
-            for email, embedding in zip(email_data, embeddings):
-                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
-                                  project_id=project_id)
-                db.session.add(new_email)
-
-                for attachment in email['attachments']:
-                    with open(attachment['file_path'], "r") as file:
-                        file_content = file.read()
-                    new_attachment = Email(subject=attachment['file_name'], snippet=file_content, embedding=embedding,
-                                           project_id=project_id)
-                    db.session.add(new_attachment)
-
-            db.session.commit()
-        # if the project summary for this project is empty, then call def project_summary(project_id)
+    # if the project summary for this project is empty, then call def project_summary(project_id)
     if not Project.query.filter_by(id=project_id).first().summary:
         user_input = "Write out a detailed summary about everything you know about this. Write it out in bullet point format."
         trainedAsk = ask(int(project_id), user_input)
@@ -225,7 +289,6 @@ def chat():
     return jsonify({"assistant_message": trainedAsk_html})
 
 
-
 @app.route('/project/<int:project_id>/chat', methods=['GET'])
 @login_required
 def project_chat(project_id):
@@ -238,10 +301,35 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     form = RegistrationForm()
+    token = request.args.get('token')
+    if token is not None:
+        result = verify_invitation_token(token)
+        if not result:
+            flash('Invalid or expired token')
+            return redirect(url_for('index'))
+        # Unpack the email and project_id
+        email, project_id = result
+
+        # Pre-populate email field
+        form.email.data = email
+        form.token.data = token
+        form.project_id.data = project_id
+    email = form.email.data
+
     if form.validate_on_submit():
+        # get token from url
+        token = form.token.data
+        project_id = form.project_id.data
         user = User(email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
+        if token is not None:
+            # If there's an invitation, add user to the project and delete the invitation
+            invitation = Invitation.query.filter_by(email=email, project_id=project_id).first()
+            if invitation is not None:
+                project = Project.query.get_or_404(invitation.project_id)
+                project.users.append(user)
+                db.session.delete(invitation)
         db.session.commit()
         flash('Congratulations, you are now a registered user!')
         return redirect(url_for('login'))
@@ -300,7 +388,6 @@ def strings_ranked_by_relatedness(
     return strings[:top_n], relatednesses[:top_n]
 
 
-
 def num_tokens(text: str, model: str = GPT_MODEL) -> int:
     """Return the number of tokens in a string."""
     encoding = tiktoken.encoding_for_model(model)
@@ -348,7 +435,8 @@ def ask_route():
 
     return jsonify({'updated_summary': updated_summary})
 
-    # chat completion llm
+
+# chat completion llm
 # llm = ChatOpenAI(
 #         openai_api_key=config['api_secret'],
 #         model_name=GPT_MODEL,
@@ -362,7 +450,6 @@ def ask_route():
 #         return_messages=True
 #
 # )
-
 def get_emails_dataframe(project_id):
     emails_cache_key = f"emails_{project_id}"
     df = cache.get(emails_cache_key)
@@ -380,6 +467,7 @@ def get_emails_dataframe(project_id):
 
     return df
 
+
 def ask(
         project_id: int,
         query: str,
@@ -387,7 +475,6 @@ def ask(
         token_budget: int = 4097 - 500,
         print_message: bool = False,
 ) -> str:
-
     # get all emails from the project
 
     message = query_message(project_id, query, model=model, token_budget=token_budget)
@@ -430,7 +517,7 @@ def ask(
     #
     # message = agent(query)
 
-# ******************* PINECONE *******************
+    # ******************* PINECONE *******************
     # vector_namespace = Project.query.get_or_404(project_id).name
     # res = openai.Embedding.create(
     #     input=[query],
@@ -486,19 +573,18 @@ def ask(
     # Extract the response message
     response_message = response['choices'][0]['message']['content']
 
-
     # Try to find a document relevant to the response
     document = get_relevant_document(response_message, project_id)
     if document is not None:
         path, filename = os.path.split(document.content)
         document_link = url_for('dashboard_bp.serve_file', path=path, filename=filename)
-        response_message += f' You can view the related document at <a href="{document_link}">{filename}</a>.'
+        response_message += f'<br><br> You can view the related document at <a href="{document_link}">{filename}</a>.'
 
     # Try to find an email relevant to the response
     email = get_relevant_email(response_message, project_id)
     if email is not None:
         email_link = url_for('dashboard_bp.email', email_id=email.id)
-        response_message += f' You can view the related email at <a href="{email_link}">email thread</a>.'
+        response_message += f'<br><br> You can view the related email at <a href="{email_link}">email thread</a>.'
 
     # Add the model's response to the conversation
     conversation.add_model_message(response_message)
@@ -529,182 +615,315 @@ def sanitize_filename(filename):
     return filename
 
 
-def scrape(project_id, project_domain):
-    local_folder = 'attachments'
-    latest_email_date = (
-        db.session.query(func.max(Email.date_of_email))
-        .filter(Email.project_id == project_id)
-        .scalar()
-    )
-
-    if latest_email_date is not None:
-        latest_email_date = latest_email_date.astimezone(timezone.utc)
-        latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
-    else:
-        latest_email_date_str = ""
-
-    if not os.path.exists(local_folder):
-        os.makedirs(local_folder)
-
-    creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-
-    try:
-        service = build('gmail', 'v1', credentials=creds)
-        domain = project_domain
-
-        query = f"to:{domain} OR from:{domain}"
-        if latest_email_date_str:
-            query += f" after:{latest_email_date_str}"
-
-        emails = []
-        result = service.users().messages().list(userId='me', q=query).execute()
-        messages = result.get('messages', [])
-
-        for message in messages:
-            msg = service.users().messages().get(userId='me', id=message['id']).execute()
-
-            attachments = []
-            for part in msg.get('payload', {}).get('parts', []):
-                if part.get('filename') and part.get('body', {}).get('attachmentId'):
-                    attachment_id = part['body']['attachmentId']
-                    attachment = service.users().messages().attachments().get(
-                        userId='me', messageId=message['id'], id=attachment_id
-                    ).execute()
-                    data = attachment.get('data')
-                    file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
-                    file_name = sanitize_filename(part.get('filename'))  # Sanitize the filename
-
-                    with open(os.path.join(local_folder, file_name), 'wb') as local_file:
-                        local_file.write(file_data)
-                        attachments.append({'file_path': local_file.name, 'file_name': file_name})
-
-                        new_document = Document(
-                            name=file_name,
-                            content=local_file.name,  # store the file path
-                            project_id=project_id,
-                        )
-                        db.session.add(new_document)
-            db.session.commit()
-
-            msg['attachments'] = attachments
-            emails.append(msg)
-
-        if not emails:
-            print(f'No emails found to or from {domain}.')
-            return
-
-        email_data = []
-
-        for email in emails:
-            headers = email['payload']['headers']
-            snippet = email['snippet']
-            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), None)
-            sender = next((h['value'] for h in headers if h['name'] == 'From'), None)
-            to = next((h['value'] for h in headers if h['name'] == 'To'), None)
-            date = next(h['value'] for h in headers if h['name'] == 'Date')
-
-            modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
-            email_data.append({'subject': subject, 'snippet': modified_snippet, 'date_of_email': date})
-
-            for attachment in email['attachments']:
-                file_path = attachment['file_path']
-                file_name = attachment['file_name']
-                file_content = None
-
-                if file_path.endswith('.pdf'):
-                    file_content = extract_text_from_pdf(file_path)
-                elif file_path.endswith('.docx'):
-                    file_content = extract_text_from_docx(file_path)
-
-                if file_content:
-                    email_data.append({
-                        'subject': file_name,
-                        'snippet': file_content,
-                        'date_of_email': date
-                    })
-
-        return email_data
-
-    except HttpError as error:
-        print(f'An error occurred: {error}')
+# def scrape(project_id, project_domain):
+#     local_folder = 'attachments'
+#     latest_email_date = (
+#         db.session.query(func.max(Email.date_of_email))
+#         .filter(Email.project_id == project_id)
+#         .scalar()
+#     )
+#
+#     if latest_email_date is not None:
+#         latest_email_date = latest_email_date.astimezone(timezone.utc)
+#         latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
+#     else:
+#         latest_email_date_str = ""
+#
+#     if not os.path.exists(local_folder):
+#         os.makedirs(local_folder)
+#
+#     creds = None
+#     if os.path.exists('token.json'):
+#         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+#     if not creds or not creds.valid:
+#         if creds and creds.expired and creds.refresh_token:
+#             creds.refresh(Request())
+#         else:
+#             flow = InstalledAppFlow.from_client_secrets_file(
+#                 'credentials.json', SCOPES)
+#             creds = flow.run_local_server(port=0)
+#         with open('token.json', 'w') as token:
+#             token.write(creds.to_json())
+#
+#     try:
+#         service = build('gmail', 'v1', credentials=creds)
+#         domain = project_domain
+#
+#         query = f"to:{domain} OR from:{domain}"
+#         if latest_email_date_str:
+#             query += f" after:{latest_email_date_str}"
+#
+#         emails = []
+#         result = service.users().messages().list(userId='me', q=query).execute()
+#         messages = result.get('messages', [])
+#
+#         for message in messages:
+#             msg = service.users().messages().get(userId='me', id=message['id']).execute()
+#
+#             attachments = []
+#             for part in msg.get('payload', {}).get('parts', []):
+#                 if part.get('filename') and part.get('body', {}).get('attachmentId'):
+#                     attachment_id = part['body']['attachmentId']
+#                     attachment = service.users().messages().attachments().get(
+#                         userId='me', messageId=message['id'], id=attachment_id
+#                     ).execute()
+#                     data = attachment.get('data')
+#                     file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+#                     file_name = sanitize_filename(part.get('filename'))  # Sanitize the filename
+#
+#                     with open(os.path.join(local_folder, file_name), 'wb') as local_file:
+#                         local_file.write(file_data)
+#                         attachments.append({'file_path': local_file.name, 'file_name': file_name})
+#
+#                         new_document = Document(
+#                             name=file_name,
+#                             content=local_file.name,  # store the file path
+#                             project_id=project_id,
+#                         )
+#                         db.session.add(new_document)
+#             db.session.commit()
+#
+#             msg['attachments'] = attachments
+#             emails.append(msg)
+#
+#         if not emails:
+#             print(f'No emails found to or from {domain}.')
+#             return
+#
+#         email_data = []
+#
+#         for email in emails:
+#             headers = email['payload']['headers']
+#             snippet = email['snippet']
+#             subject = next((h['value'] for h in headers if h['name'] == 'Subject'), None)
+#             sender = next((h['value'] for h in headers if h['name'] == 'From'), None)
+#             to = next((h['value'] for h in headers if h['name'] == 'To'), None)
+#             date = next(h['value'] for h in headers if h['name'] == 'Date')
+#
+#             modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
+#             email_data.append({'subject': subject, 'snippet': modified_snippet, 'date_of_email': date})
+#
+#             for attachment in email['attachments']:
+#                 file_path = attachment['file_path']
+#                 file_name = attachment['file_name']
+#                 file_content = None
+#
+#                 if file_path.endswith('.pdf'):
+#                     file_content = extract_text_from_pdf(file_path)
+#                 elif file_path.endswith('.docx'):
+#                     file_content = extract_text_from_docx(file_path)
+#
+#                 if file_content:
+#                     email_data.append({
+#                         'subject': file_name,
+#                         'snippet': file_content,
+#                         'date_of_email': date
+#                     })
+#
+#         return email_data
+#
+#     except HttpError as error:
+#         print(f'An error occurred: {error}')
 
 
 # Function to generate embeddings for email subjects and snippets
+def scrape(project_id, project_domain):
+    with current_app.app_context():
+        local_folder = 'attachments'
+        latest_email_date = (
+            db.session.query(func.max(Email.date_of_email))
+            .filter(Email.project_id == project_id)
+            .scalar()
+        )
+
+        if latest_email_date is not None:
+            latest_email_date = latest_email_date.astimezone(timezone.utc)
+            latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
+        else:
+            latest_email_date_str = ""
+
+        if not os.path.exists(local_folder):
+            os.makedirs(local_folder)
+
+        creds = None
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'credentials.json', SCOPES)
+                creds = flow.run_local_server(port=0)
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+
+        try:
+            service = build('gmail', 'v1', credentials=creds)
+            domain = project_domain
+
+            query = f"to:{domain} OR from:{domain}"
+            if latest_email_date_str:
+                query += f" after:{latest_email_date_str}"
+
+            emails = []
+            page_token = None
+            while True:
+                result = service.users().messages().list(userId='me', q=query, pageToken=page_token).execute()
+                messages = result.get('messages', [])
+                page_token = result.get('nextPageToken')
+
+                for message in messages:
+                    msg = service.users().messages().get(userId='me', id=message['id']).execute()
+
+                    attachments = []
+                    for part in msg.get('payload', {}).get('parts', []):
+                        if part.get('filename') and part.get('body', {}).get('attachmentId'):
+                            attachment_id = part['body']['attachmentId']
+                            attachment = service.users().messages().attachments().get(
+                                userId='me', messageId=message['id'], id=attachment_id
+                            ).execute()
+                            data = attachment.get('data')
+                            file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+                            file_name = sanitize_filename(part.get('filename'))  # Sanitize the filename
+
+                            with open(os.path.join(local_folder, file_name), 'wb') as local_file:
+                                local_file.write(file_data)
+                                attachments.append({'file_path': local_file.name, 'file_name': file_name})
+
+                                new_document = Document(
+                                    name=file_name,
+                                    content=local_file.name,  # store the file path
+                                    project_id=project_id,
+                                )
+                                db.session.add(new_document)
+                    db.session.commit()
+
+                    msg['attachments'] = attachments
+                    emails.append(msg)
+
+                if not page_token:
+                    break
+
+            if not emails:
+                print(f'No emails found to or from {domain}.')
+                return
+
+            email_data = []
+
+            for email in emails:
+                headers = email['payload']['headers']
+                snippet = email['snippet']
+                subject = next((h['value'] for h in headers if h['name'] == 'Subject'), None)
+                sender = next((h['value'] for h in headers if h['name'] == 'From'), None)
+                to = next((h['value'] for h in headers if h['name'] == 'To'), None)
+                date = next(h['value'] for h in headers if h['name'] == 'Date')
+
+                modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
+                email_data.append({'subject': subject, 'snippet': modified_snippet, 'date_of_email': date})
+
+                for attachment in email['attachments']:
+                    file_path = attachment['file_path']
+                    file_name = attachment['file_name']
+                    file_content = None
+
+                    if file_path.endswith('.pdf'):
+                        file_content = extract_text_from_pdf(file_path)
+                    elif file_path.endswith('.docx'):
+                        file_content = extract_text_from_docx(file_path)
+
+                    if file_content:
+                        email_data.append({
+                            'subject': file_name,
+                            'snippet': file_content,
+                            'date_of_email': date
+                        })
+
+            return email_data
+
+        except HttpError as error:
+            print(f'An error occurred: {error}')
+
+
 def generate_email_embeddings(email_data):
-    texts = []
+    with current_app.app_context():
+        texts = []
 
-    for email in email_data:
-        texts.append(f"{email['subject']}\n\n{email['snippet']}")  # Add emails
+        for email in email_data:
+            texts.append(f"{email['subject']}\n\n{email['snippet']}")  # Add emails
 
-        # Check if 'attachments' key exists in the email dictionary
-        if 'attachments' in email:
-            for attachment in email['attachments']:
-                extracted_text = None
-                if attachment['file_name'].endswith('.pdf'):
-                    extracted_text = extract_text_from_pdf(attachment['file_path'])
-                elif attachment['file_name'].endswith('.docx'):
-                    extracted_text = extract_text_from_docx(attachment['file_path'])
+            # Check if 'attachments' key exists in the email dictionary
+            if 'attachments' in email:
+                for attachment in email['attachments']:
+                    extracted_text = None
+                    if attachment['file_name'].endswith('.pdf'):
+                        extracted_text = extract_text_from_pdf(attachment['file_path'])
+                    elif attachment['file_name'].endswith('.docx'):
+                        extracted_text = extract_text_from_docx(attachment['file_path'])
 
-                if extracted_text is not None:
-                    texts.append(f"{attachment['file_name']}\n\n{extracted_text}")
+                    if extracted_text is not None:
+                        texts.append(f"{attachment['file_name']}\n\n{extracted_text}")
 
-    embeddings = []
+        embeddings = []
 
-    for text in texts:
-        response = openai.Embedding.create(model="text-embedding-ada-002", input=text)
-        # embeddings.append(response["data"][0]["embedding"])
-        embedding_values = list(response['data'][0]['embedding'])
-        embeddings.append(embedding_values)
+        for text in texts:
+            response = openai.Embedding.create(model="text-embedding-ada-002", input=text)
+            # embeddings.append(response["data"][0]["embedding"])
+            embedding_values = list(response['data'][0]['embedding'])
+            embeddings.append(embedding_values)
 
-    return embeddings
+        return embeddings
+
+
+@app.route('/project/<int:project_id>/members')
+def project_members(project_id):
+    project = Project.query.get(project_id)
+    # users are all the members of this project in project.users table
+    users = User.query.join(Project.users).filter(Project.id == project_id).all()
+    invitations = Invitation.query.filter_by(project_id=project_id).all()
+
+    if project is None:
+        abort(404)  # Not found
+    return render_template('members.html', project=project, users=users, invitations=invitations)
 
 
 def scrape_and_store_emails(project_id, project_domain):
-    email_data = scrape(project_id, project_domain)
+    @copy_current_request_context
+    def scrape_with_context():
+        return scrape(project_id, project_domain)
 
-    if email_data:
-        email_embeddings = generate_email_embeddings(email_data)
-        vector_namespace = Project.query.get_or_404(project_id).name
+    @copy_current_request_context
+    def generate_email_embeddings_with_context(email_data):
+        return generate_email_embeddings(email_data)
+
+    with ThreadPoolExecutor() as executor:
+        email_data_future = executor.submit(scrape_with_context)
+        email_data = email_data_future.result()
+
+        email_embeddings_future = executor.submit(generate_email_embeddings_with_context, email_data)
+        email_embeddings = email_embeddings_future.result()
+
+        # vector_namespace = Project.query.get_or_404(project_id).name
+        new_emails = []
+        # vectors = []
 
         with current_app.app_context():
-            count = 0
-            for email, embedding in zip(email_data, email_embeddings):
-                count += 1
-                date_str = email[
-                    'date_of_email']  # Assuming email['date_of_email'] is a string in the format 'Mon, 24 Apr 2023 16:16:58 -0500'
-                # convert date_str to python datetime object
+            for count, (email, embedding) in enumerate(zip(email_data, email_embeddings), 1):
+                date_str = email['date_of_email']
                 date_obj = parse(date_str)
-                new_email = Email(subject=email['subject'], snippet=email['snippet'], embedding=embedding,
-                                  date_of_email=date_obj, project_id=project_id)
-                db.session.add(new_email)
+                new_emails.append(Email(subject=email['subject'], snippet=email['snippet'],
+                                        embedding=embedding, date_of_email=date_obj, project_id=project_id))
 
-                # vector_id is vector_namespace + count as a string
-                vector_id = vector_namespace + str(count)
+                # vector_id = vector_namespace + str(count)
+                # date_of_email_str = date_obj.strftime("%Y-%m-%d %H:%M:%S")
+                # vectors.append({'id': vector_id, 'values': embedding,
+                #                 'metadata': {'snippet': email['snippet'], 'subject': email['subject'],
+                #                              'date_of_email': date_of_email_str}})
 
-                # make date_of_email a string
-                date_of_email_str = date_obj.strftime("%Y-%m-%d %H:%M:%S")
-
-                # create vector for pinecone index
-                vectors = [{'id': vector_id, 'values': embedding, 'metadata':{'snippet': email['snippet'], 'subject': email['subject'], 'date_of_email': date_of_email_str}}]
-
-                # Upsert embeddings to Pinecone index
-                pinecone_index.upsert(vectors=vectors, namespace=vector_namespace)
-
+            db.session.bulk_save_objects(new_emails)
             db.session.commit()
 
-    else:
-        print("No emails found.")
+            # pinecone_index.upsert(vectors=vectors, namespace=vector_namespace)
 
 
 if __name__ == '__main__':

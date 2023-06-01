@@ -1,72 +1,88 @@
 {% extends "base.html" %}
 
-{% block title %}
-    IronKnowledge - AI-powered project management app
-{% endblock %}
+
 
 {% block content %}
-
     <body>
+{#    link to css bootstrap#}
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.6.0/css/bootstrap.min.css">
+    <img id="fade-image" src="{{ url_for('static', filename='images/ironMindHome.v7.jpg') }}" alt="IronMind Home">
 
-
-    <div class="container-fluid px-0">
-    <div class="row hero-section align-items-center">
-        <div class="col-md-6 order-md-2 text-center">
-            <img src="../static/images/ironMindHome.v5.jpg" alt="IronKnowledge dashboard" class="img-fluid">
-        </div>
-        <div class="col-md-6 order-md-1">
-            <h1 class="display-3 mb-3">Project Management,<br>Powered by AI</h1>
-            <p class="lead mb-4">IronKnowledge is the AI-powered project management app that makes your life easier. Get started today and experience a new level of project management.</p>
-            <a class="btn btn-lg btn-primary mr-2" href="{{ url_for('register') }}" role="button">Sign up now</a>
-            <a class="btn btn-lg btn-outline-primary" href="#" role="button">Learn more</a>
-        </div>
-    </div>
-
-    <div class="row feature-section py-5">
-    <div class="col-md-4">
-    <div class="card-body">
-        <h2 class="card-title mb-3">AI-powered Summarization</h2>
-        <p class="card-text mb-4">IronKnowledge uses GPT-4 AI models with engineered prompts to capture and summarize project information. After the model summarizes the information, the user can approve, adjust, or delete the summary.</p>
-    </div>
-    </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow mb-4">
-            <div class="card-body">
-                <h2 class="card-title mb-3">Living Document Dashboard</h2>
-                <p class="card-text mb-4">The living document is hosted on a cloud-based dashboard accessible to all users. Only selected users will be able to add to the document. The dashboard is designed using a Flask framework with Bootstrap styling, and the search functionality will be similar to a chat search, with the model providing attachments as evidence or return.</p>
+    <div id="content">
+        <div class="hero">
+            <div>
+                <h1>Welcome to IronMind</h1>
+                <p>Your Virtual Teammate Who Never Forgets</p>
+                {% if not current_user.is_authenticated %}
+                    <a class="btn-index" href="{{ url_for('login') }}">Get Started</a>
+                {% endif %}
             </div>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow mb-4">
-            <div class="card-body">
-                <h2 class="card-title mb-3">Modular HR Data Integration</h2>
-                <p class="card-text mb-4">IronKnowledge provides modular integration with HR data systems such as SAP or Workday to ensure the most up-to-date information is captured. The app also updates the living document when the model learns new information. However, any update would require user input to verify and approve the changes.</p>
+
+        <div class="section" id="section1">
+            <div class="project-card-index">
+                <div class="text" style="float: right">
+                    <h2>Never Forget a Detail</h2>
+                    <p>With IronMind, you can keep track of every detail of your projects. Our AI-powered assistant helps you remember everything, so you can focus on what matters most.</p>
+                </div>
+                <img src="{{ url_for('static', filename='images/section1.jpg') }}" alt="Details">
             </div>
         </div>
-    </div>
-    </div>
 
-    <div class="row py-5">
-        <div class="col-md-6">
-            <h2 class="mb-3">Data Accuracy and Bias Safeguards</h2>
-            <p class="mb-4">The app is designed to prevent incorrect or incomplete information from being added to the living document. We have safeguards in place to ensure that information is accurate and unbiased.</p>
+        <div class="section" id="section2">
+            <div class="project-card-index reverse">
+                <img src="{{ url_for('static', filename='images/section2.jpg') }}" alt="Filler Image 2">
+                <div class="text">
+                    <h2>Collaborate with Ease</h2>
+                    <p>IronMind makes collaboration easy. Share documents, chat with team members, and keep everyone on the same page.</p>
+                </div>
+            </div>
         </div>
-        <div class="col-md-6">
-            <h2 class="mb-3">Version Control</h2>
-            <p class="mb-4">The app will have a version control feature that allows users to see previous versions of the living document and compare changes over time.</p>
-        </div>
-    </div>
 
-    <div class="row call-to-action py-5">
-        <div class="col-md-12 text-center">
-            <h2 class="mb-3">Ready to take your project management to the next level?</h2>
-            <a class="btn btn-lg btn-primary mr-2" href="{{ url_for('register') }}" role="button">Sign up now</a>
-            <a class="btn btn-lg btn-outline-primary" href="#" role="button">Learn more</a>
+        <div class="section" id="section3">
+            <div class="project-card-index">
+                            <div class="text" style="float: right">
+                                <h2>Stay Organized</h2>
+                                <p>Keep your projects organized with IronMind. Our intuitive interface makes it easy to manage your tasks and deadlines.</p>
+
+                            </div>
+                            <img src="{{ url_for('static', filename='images/section3.jpg') }}" alt="Filler Image 3">
+
+                    </div>
+
+
+
+            </div>
         </div>
-    </div>
     </body>
 
+    <script>
+        window.onload = function() {
+            var image = document.getElementById('fade-image');
+            var content = document.getElementById('content');
+            image.style.opacity = 1;
+
+            setTimeout(function() {
+                image.style.opacity = 0;
+                setTimeout(function() {
+                    content.style.opacity = 1;
+                    image.style.display = 'none';
+                }, 2000);
+            }, 2000);
+
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = 1;
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            document.querySelectorAll('.section').forEach(section => {
+                section.style.opacity = 0;
+                observer.observe(section);
+            });
+        };
+    </script>
 
 {% endblock %}

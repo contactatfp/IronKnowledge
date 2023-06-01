@@ -13,16 +13,25 @@ dashboard_bp = Blueprint('dashboard_bp', __name__)
 @dashboard_bp.route('/dashboard_main', methods=['GET'])
 def dashboard_main():
     projects = Project.query.filter_by(user_id=current_user.id).all()
+    # search for user id in project_user table in column user_id if there is a match, then get the project_id in that row and add the project with that project id to projects
+    otherProjects = Project.query.filter(Project.users.any(id=current_user.id)).all()
+    for project in otherProjects:
+        if project not in projects:
+            projects.append(project)
+
     return render_template('dashboard.html', projects=projects)
 
 
+from flask import request
+
 @dashboard_bp.route('/dashboard/<int:project_id>', methods=['GET'])
 def project_details(project_id):
+    page = request.args.get('page', 1, type=int)
     project = Project.query.get_or_404(project_id)
     project_domain = Project.query.get_or_404(project_id).company_domain
-    if project.user_id != current_user.id:
-        abort(403)
-    return render_template('project_details.html', project=project, domain=project_domain)
+    documents = Document.query.filter_by(project_id=project_id).paginate(page=page, per_page=12)
+    return render_template('project_details.html', project=project, domain=project_domain, documents=documents)
+
 
 @dashboard_bp.route('/document/<int:document_id>')
 def document(document_id):
@@ -43,8 +52,6 @@ def email(email_id):
 @dashboard_bp.route('/dashboard/<int:project_id>/documents', methods=['GET'])
 def project_documents(project_id):
     project = Project.query.get_or_404(project_id)
-    if project.user_id != current_user.id:
-        abort(403)
     documents = Document.query.filter_by(project_id=project_id).all()
     return render_template('project_documents.html', project=project, documents=documents)
 
@@ -111,6 +118,7 @@ def add_project():
         if project_name and company_domain and keyword:  # Check if all fields are filled
             new_project = Project(name=project_name, user_id=current_user.id, company_domain=company_domain, keyword=keyword)
             db.session.add(new_project)
+            new_project.users.append(current_user)
             db.session.commit()
             return redirect(url_for('dashboard_bp.dashboard_main'))
         else:

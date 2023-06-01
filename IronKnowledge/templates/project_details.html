@@ -1,21 +1,37 @@
 {% extends "base.html" %}
 
-{% block content %}
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center">
-            <h1>Project Details</h1>
-            <button id="refresh-button" class="btn btn-info pr-10">
-                <span id="refresh-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
-                Refresh Model
-            </button>
+{% block title %}Project Details{% endblock %}
 
+
+
+{% block content %}
+
+
+    <div class="container-documents">
+
+        <div class="header">
+
+            <h1>Project Details</h1>
+            <div class="button-group-documents">
+                <a href="{{ url_for('dashboard_bp.add_document', project_id=project.id) }}" class="btn btn-action">
+                    <i class="fas fa-plus"></i> Add Document
+                </a>
+                <a id="refresh-button" class="btn btn-action" href="#" style="margin-left: 20px;">
+                    <span id="refresh-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none; color: white;"></span>  <!-- Added inline style to set the color of the spinner to white -->
+                    Refresh Model
+                </a>
+            </div>
         </div>
-        <p>Name: {{ project.name }}</p>
-        <p>Summary: {{ project.summary | replace('\n', '<br>') | safe }}</p>
-        <p>Created at: {{ project.created_at }}</p>
-        <p>Version: {{ project.version }}</p>
+        <div class="project-card-documents">
+            <p><strong>Name:</strong> {{ project.name }}</p>
+            <p>Summary:{{ project.summary | replace('\n', '<br>') | safe }}</p>
+            <p><strong>Created at:</strong> {{ project.created_at }}</p>
+            <p><strong>Version:</strong> {{ project.version }}</p>
+        </div>
+
         <h2>Documents</h2>
-        <table class="table table-striped">
+        <div class="hero">
+        <table class="table-striped">
             <thead>
             <tr>
                 <th>Name</th>
@@ -23,52 +39,76 @@
                 <th>Actions</th>
             </tr>
             </thead>
+
             <tbody>
-            {% for document in project.documents %}
+
+            {% for document in documents.items %}
                 <tr>
-                    <td>{{ document.name }}</td>
+                    <td style="text-align: left">{{ document.name }}</td>
                     <td>{{ document.created_at }}</td>
                     <td>
-                        <a href="{{ url_for('dashboard_bp.document', document_id=document.id) }}" class="btn btn-primary">View</a>
+                        <a href="{{ url_for('dashboard_bp.document', document_id=document.id) }}" class="btn btn-link"><i class="fas fa-eye"></i> View</a>
                     </td>
                 </tr>
             {% endfor %}
             </tbody>
+
         </table>
-        <a href="{{ url_for('dashboard_bp.add_document', project_id=project.id) }}" class="btn btn-success">Add Document</a>
+    </div>
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
+                {% for page_num in documents.iter_pages() %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == documents.page %}active{% endif %}">
+                            <a class="page-link" style="font-size: larger" href="{{ url_for('dashboard_bp.project_details', project_id=project.id, page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item">
+                            <a class="page-link">...</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </nav>
     </div>
 
     <script>
-        document.getElementById("refresh-button").addEventListener("click", function() {
-            const projectId = '{{ project.id }}'; // Get the project id from the Jinja2 variable
-            const projectDomain = '{{ project.company_domain }}'; // Get the project domain from the Jinja2 variable
+        document.getElementById("refresh-button").addEventListener("click", function(event) {
+            event.preventDefault(); // Prevent the default action of the anchor tag
+
+            const projectId = '{{ project.id }}';
+            const projectDomain = '{{ project.company_domain }}';
 
             // Show the spinner
             document.getElementById("refresh-spinner").style.display = "inline-block";
 
-            fetch(`/refresh_emails?project_id=${projectId}&project_domain=${projectDomain}`, { // Include the project id and project domain as URL parameters
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'same-origin'
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    // Hide the spinner when the data has been fetched
-                    document.getElementById("refresh-spinner").style.display = "none";
-
-                    // Refresh the page
-                    location.reload();
+            // Use setTimeout to delay the fetch
+            setTimeout(() => {
+                fetch(`/refresh_emails?project_id=${projectId}&project_domain=${projectDomain}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
                 })
-                .catch(error => {
-                    console.error('Error fetching emails:', error);
-                    // Hide the spinner if there was an error
-                    document.getElementById("refresh-spinner").style.display = "none";
-                });
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        // Hide the spinner when the data has been fetched
+                        document.getElementById("refresh-spinner").style.display = "none";
+
+                        // Refresh the page
+                        location.reload();
+                    })
+                    .catch(error => {
+                        console.error('Error fetching emails:', error);
+                        // Hide the spinner if there was an error
+                        document.getElementById("refresh-spinner").style.display = "none";
+                    });
+            }, 0);
         });
     </script>
+
 
 {% endblock %}

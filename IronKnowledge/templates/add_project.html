@@ -1,26 +1,30 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="container">
-        <h1>Add Project</h1>
-        <form method="post" action="{{ url_for('dashboard_bp.add_project') }}">
-            <div class="form-group">
-                <label for="project_name">Project Name</label>
-                <input type="text" class="form-control" id="project_name" name="project_name" required>
+    <div class="hero">
+    <div class="form-container">
+        <div>
+            <h1>Add Project</h1>
+        </div>
+
+        <form method="post" action="{{ url_for('dashboard_bp.add_project') }}" class="form-styling" style="align-content: space-evenly" >
+            <div class="input-group">
+{#                <label for="project_name">Project Name</label>#}
+                <input type="text" class="form-control-line" id="project_name" name="project_name" required placeholder="Project Name" style="width: 55%">
             </div>
-            <div class="form-group">
-                <label for="company_domain">Company Domain</label>
-                <input type="text" class="form-control" id="company_domain" name="company_domain" required pattern="(\[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]">
-                <small class="form-text text-muted">Please enter the company domain in the format "company.com".</small>
+            <div class="input-group">
+{#                <label for="company_domain">Company Domain</label>#}
+                <input type="text" class="form-control-line" id="company_domain" name="company_domain" required pattern="(\[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]" placeholder="Company Domain in the format 'company.com'" style="width: 55%">
+{#                <small class="form-text text-muted">Please enter the Company Domain in the format "company.com".</small>#}
             </div>
-            <div class="form-group">
-                <label for="keyword">Keyword</label>
-                <input type="text" class="form-control" id="keyword" name="keyword" required>
+            <div class="input-group">
+{#                <label for="keyword">Keyword</label>#}
+                <input type="text" class="form-control-line" id="keyword" name="keyword" placeholder="Keyword" style="width: 55%">
             </div>
-{#            create a div that gives more space to the submit button#}
-            <div class="form-group">
-            <button type="submit" class="btn btn-primary btn-block">Add Project</button>
-</div>
+            <div class="button-group">
+                <button type="submit" class="btn btn-action" style="width: 55%;">Add Project</button>
+            </div>
         </form>
+    </div>
     </div>
 {% endblock %}

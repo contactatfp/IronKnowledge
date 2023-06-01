@@ -5,12 +5,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
+# Auxiliary table for many-to-many relationship
+project_user_table = db.Table('project_user',
+                              db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+                              db.Column('project_id', db.Integer, db.ForeignKey('project.id'))
+                              )
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    projects = db.relationship('Project', backref='user', lazy=True)
+    projects = db.relationship('Project', secondary=project_user_table, backref='users', lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -63,3 +69,12 @@ class Attachment(db.Model):
 
     def __repr__(self):
         return f"<Attachment {self.file_name}>"
+
+
+class Invitation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Invitation to {self.email} for project {self.project_id}>'

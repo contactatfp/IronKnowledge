@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="hero">
+    <div class="form-container">
+            <h1>Add User To {{ project.name }}</h1>
+
+        <form action="{{ url_for('add_user') }}" method="post" class="form-styling">
+            {{ form.hidden_tag() }}
+            <input type="hidden" name="project_id"  value="{{ request.args.get('project_id') }}">
+            <div class="input-group">
+                <label for="{{ form.email.id }}"></label>
+                {{ form.email(class="form-control-line", id=form.email.id, placeholder="Email") }}
+            </div>
+            <div class="button-group">
+                <button type="submit" class="btn btn-action" style="width: 30%">Add User</button>
+            </div>
+        </form>
+    </div>
+    </div>
+{% endblock %}

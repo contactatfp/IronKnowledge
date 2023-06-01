@@ -1,27 +1,35 @@
 {% extends "base.html" %}
 
+{% block title %}Login{% endblock %}
+
 {% block content %}
-    <div class="row justify-content-center">
-        <div class="col-md-4">
-            <h1 class="text-center mb-4">Login</h1>
-            <form action="{{ url_for('login') }}" method="post">
+    <div class="hero">
+    <div class="container">
+
+        <div class="form-container">
+            <h1>Login</h1>
+            <form action="{{ url_for('login') }}" method="post" class="form-styling" >
                 {{ form.hidden_tag() }}
-                <div class="form-floating mb-3">
-                    {{ form.email(class="form-control", placeholder="Email") }}
-                    <label for="{{ form.email.id }}">Email</label>
+                <div class="input-group">
+                    {{ form.email(class="form-control form-control-line", style="width:100%",  placeholder="Email") }}
+                    <label for="{{ form.email.id }}"></label>
                 </div>
-                <div class="form-floating mb-3">
-                    {{ form.password(class="form-control", placeholder="Password") }}
-                    <label for="{{ form.password.id }}">Password</label>
+                <div class="input-group">
+                    {{ form.password(class="form-control form-control-line", style="width:100%", placeholder="Password") }}
+                    <label for="{{ form.password.id }}"></label>
                 </div>
-                <div class="form-check mb-3">
-                    {{ form.remember_me(class="form-check-input") }}
-                    <label class="form-check-label" for="{{ form.remember_me.id }}">Remember me</label>
+                <div class="button-group"  >
+                    {{ form.submit(class="btn", style="width:100%") }}
                 </div>
-                <div class="d-grid">
-                    {{ form.submit(class="btn btn-primary btn-block") }}
+                <br><br>
+                <div class="checkbox-group">
+                    {{ form.remember_me() }}
+                    <label for="{{ form.remember_me.id }}">Remember me</label>
                 </div>
             </form>
+
         </div>
+        <p>Don't have an account? <a href="{{ url_for('register') }}">Sign up</a></p>
+    </div>
     </div>
 {% endblock %}
