@@ -22,13 +22,16 @@ def dashboard_main():
     return render_template('dashboard.html', projects=projects)
 
 
+from flask import request
+
 @dashboard_bp.route('/dashboard/<int:project_id>', methods=['GET'])
 def project_details(project_id):
+    page = request.args.get('page', 1, type=int)
     project = Project.query.get_or_404(project_id)
     project_domain = Project.query.get_or_404(project_id).company_domain
-    if project.user_id != current_user.id:
-        abort(403)
-    return render_template('project_details.html', project=project, domain=project_domain)
+    documents = Document.query.filter_by(project_id=project_id).paginate(page=page, per_page=12)
+    return render_template('project_details.html', project=project, domain=project_domain, documents=documents)
+
 
 @dashboard_bp.route('/document/<int:document_id>')
 def document(document_id):

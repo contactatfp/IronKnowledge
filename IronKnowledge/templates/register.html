@@ -1,29 +1,32 @@
 {% extends "base.html" %}
 
+{% block title %}Register{% endblock %}
+
 {% block content %}
-    <div class="row justify-content-center">
-        <div class="col-lg-6">
-            <div class="card mt-5">
-                <div class="card-body">
-                    <h1 class="text-center mb-4">Register</h1>
-                    <form action="{{ url_for('register') }}" method="post">
-                        {{ form.hidden_tag() }}
-                        <div class="form-group">
-                            <label for="{{ form.email.id }}">Email</label>
-                            {{ form.email(class="form-control", id=form.email.id) }}
-                        </div>
-                        <div class="form-group">
-                            <label for="{{ form.password.id }}">Password</label>
-                            {{ form.password(class="form-control", id=form.password.id) }}
-                        </div>
-                        <div class="form-group">
-                            <label for="{{ form.password2.id }}">Confirm Password</label>
-                            {{ form.password2(class="form-control", id=form.password2.id) }}
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block mt-4">Register</button>
-                    </form>
+    <div class="hero">
+    <div class="container">
+        <div class="form-container">
+            <h1>Register</h1>
+            <form action="{{ url_for('register') }}" method="post" class="form-styling">
+                {{ form.hidden_tag() }}
+                <div class="input-group">
+                    {{ form.email(class="form-control form-control-line", placeholder="Email") }}
+                    <label for="{{ form.email.id }}"></label>
                 </div>
-            </div>
+                <div class="input-group">
+                    {{ form.password(class="form-control form-control-line", placeholder="Password") }}
+                    <label for="{{ form.password.id }}"></label>
+                </div>
+                <div class="input-group">
+                    {{ form.password2(class="form-control form-control-line", placeholder="Confirm Password") }}
+                    <label for="{{ form.password2.id }}"></label>
+                </div>
+                <div class="button-group">
+                    {{ form.submit(class="btn") }}
+                </div>
+            </form>
+            <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
         </div>
+    </div>
     </div>
 {% endblock %}

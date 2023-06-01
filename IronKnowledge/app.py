@@ -112,6 +112,8 @@ SCOPES = Config.GMAIL_SCOPES
 @app.route('/add_user', methods=['GET', 'POST'])
 def add_user():
     form = NewUserForm()
+    project_ids = request.args.get('project_id')
+    project = Project.query.get_or_404(project_ids)
     if form.validate_on_submit():
         # Check if user already exists in the database
         project_id = request.form.get('project_id')
@@ -131,8 +133,7 @@ def add_user():
 
         flash('Congratulations, you added a new user!')
         return redirect(url_for('dashboard_bp.dashboard_main'))
-    print(form.errors)
-    return render_template('add_user.html', form=form)
+    return render_template('add_user.html', form=form, project=project)
 
 
 def generate_invitation_token(email, project_id):
