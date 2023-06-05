@@ -13,9 +13,9 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, serializer
 from scipy.spatial import distance
 import numpy as np
+import fitz
 
 import docx2txt
-import fitz
 import openai
 import pandas as pd
 import tiktoken
