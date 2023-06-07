@@ -10,5 +10,5 @@ class Config(object):
     HR_API_KEY = os.environ.get('HR_API_KEY') or 'your-hr-api-key-here'
     GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
     EMBEDDING_MODEL = "text-embedding-ada-002"
-    GPT_MODEL = "gpt-3.5-turbo"
-    # GPT_MODEL = "gpt-4"
+    # GPT_MODEL = "gpt-3.5-turbo"
+    GPT_MODEL = "gpt-4"

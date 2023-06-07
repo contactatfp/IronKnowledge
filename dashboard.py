@@ -22,8 +22,6 @@ def dashboard_main():
     return render_template('dashboard.html', projects=projects)
 
 
-from flask import request
-
 @dashboard_bp.route('/dashboard/<int:project_id>', methods=['GET'])
 def project_details(project_id):
     page = request.args.get('page', 1, type=int)
@@ -39,14 +37,17 @@ def document(document_id):
     path, filename = os.path.split(document.content)
     return render_template("document.html", path=path, filename=filename)
 
+
 @dashboard_bp.route('/<path:path>/<filename>')
 def serve_file(path, filename):
     return send_from_directory('attachments/', filename)
+
 
 @dashboard_bp.route('/email/<int:email_id>')
 def email(email_id):
     email = Email.query.get_or_404(email_id)
     return render_template("email.html", email=email)
+
 
 # route for all project documents. takes in project id and returns all documents for that project
 @dashboard_bp.route('/dashboard/<int:project_id>/documents', methods=['GET'])
@@ -54,6 +55,7 @@ def project_documents(project_id):
     project = Project.query.get_or_404(project_id)
     documents = Document.query.filter_by(project_id=project_id).all()
     return render_template('project_documents.html', project=project, documents=documents)
+
 
 @dashboard_bp.route('/project/<int:project_id>/summary', methods=['GET', 'POST'])
 def project_summary(project_id):
@@ -73,8 +75,48 @@ def project_summary(project_id):
     start_date = db.session.query(func.min(Email.date_of_email)).filter_by(project_id=project.id).first()
     project.start_date = start_date[0] if start_date else None
 
-    return render_template('project_summary.html', project=project)
+    snippet1 = db.session.query(Email.snippet).filter_by(project_id=project_id).first()
 
+    if len(snippet1[0]) > 150:
+        snippet1 = snippet1[0][:150] + '...'
+    snippetLast = db.session.query(Email.snippet).filter_by(project_id=project_id).order_by(
+        Email.date_of_email.desc()).first()
+    if len(snippetLast[0]) > 150:
+        snippetLast = snippetLast[0][:150] + '...'
+
+    return render_template('project_summary.html', project=project, snippetLast=snippetLast, snippet1=snippet1)
+
+
+@dashboard_bp.route('/project/<int:project_id>/mapping', methods=['GET', 'POST'])
+def project_mapping(project_id):
+    project = Project.query.get_or_404(project_id)
+
+    snippet1 = db.session.query(Email.snippet).filter_by(project_id=project_id).first()
+
+    if len(snippet1[0]) > 150:
+        snippet1 = snippet1[0][:150] + '...'
+    snippetLast = db.session.query(Email.snippet).filter_by(project_id=project_id).order_by(
+        Email.date_of_email.desc()).first()
+    if len(snippetLast[0]) > 150:
+        snippetLast = snippetLast[0][:150] + '...'
+
+    return render_template('project_mapping.html', project=project, snippetLast=snippetLast, snippet1=snippet1)
+
+
+@dashboard_bp.route('/project/<int:project_id>/function', methods=['GET', 'POST'])
+def project_function(project_id):
+    project = Project.query.get_or_404(project_id)
+
+    snippet1 = db.session.query(Email.snippet).filter_by(project_id=project_id).first()
+
+    if len(snippet1[0]) > 150:
+        snippet1 = snippet1[0][:150] + '...'
+    snippetLast = db.session.query(Email.snippet).filter_by(project_id=project_id).order_by(
+        Email.date_of_email.desc()).first()
+    if len(snippetLast[0]) > 150:
+        snippetLast = snippetLast[0][:150] + '...'
+
+    return render_template('project_function.html', project=project, snippetLast=snippetLast, snippet1=snippet1)
 
 
 @dashboard_bp.route('/dashboard/<project_id>')
@@ -116,7 +158,8 @@ def add_project():
         keyword = request.form.get('keyword')  # Get the value of the keyword field
 
         if project_name and company_domain and keyword:  # Check if all fields are filled
-            new_project = Project(name=project_name, user_id=current_user.id, company_domain=company_domain, keyword=keyword)
+            new_project = Project(name=project_name, user_id=current_user.id, company_domain=company_domain,
+                                  keyword=keyword)
             db.session.add(new_project)
             new_project.users.append(current_user)
             db.session.commit()
@@ -125,7 +168,6 @@ def add_project():
             flash('Please fill in all fields.')  # Display an error message if any field is missing
 
     return render_template('add_project.html')
-
 
 
 @dashboard_bp.route('/dashboard/add_document/<int:project_id>', methods=['GET', 'POST'])
@@ -159,7 +201,7 @@ def add_document(project_id):
 
             # redirect the user to the project details page
             return redirect(url_for('dashboard_bp.project_details', project_id=project_id))
-    #     otherwise if input is text only commit it to the database
+        #     otherwise if input is text only commit it to the database
         elif request.form.get('document_content'):
             document_name = request.form.get('document_name')
             document_content = request.form.get('document_content')

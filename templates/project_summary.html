@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-
+    <div>
     <div class="container-documents">
         <div class="header">
             <h1>{{ project.name }}</h1>
@@ -10,9 +10,9 @@
                 <span id="update-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
             </button>
         </div>
-        <div class="hero">
+
         <div class="project-card">
-            <h2>Project Summary</h2>
+            <h2 style="text-align: center">Project Summary</h2>
             <p id="summary">{{ project.summary | replace('\n', '<br>') | safe }}</p>
         </div>
 
@@ -67,7 +67,44 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ project_id: '{{ project.id }}', user_input: 'Write out a detailed summary about everything you know about this. Write it out in bullet point format.' })
+                body: JSON.stringify({ project_id: '{{ project.id }}', user_input: `
+        # Emails Dataset
+
+            *Email 1*
+            From: X
+            Date: 2023-03-01
+            Snippet: ${'{{ snippet1 }}'}
+
+        *Email 2*
+            From: Y
+            Date: 2023-03-03
+            Snippet: ${'{{ snippetLast }}'}
+
+        ... [more emails here] ...
+
+            ---
+
+        ## Task
+
+            Given the above emails dataset, please analyze the information and construct a comprehensive summary of all known information. The summary should incorporate key details from the emails, such as project milestones, decisions made, people involved, and any other noteworthy elements.
+
+                For each significant point in the summary, please:
+
+            1. State the key fact or event.
+            2. Identify the people involved.
+            3. Mention the email(s) this point is based on (by noting the subject and date of the email).
+
+            The summary should be well-organized and structured to ensure easy comprehension. It should begin with the earliest events and proceed chronologically to the most recent events.
+
+                Example:
+
+        *Summary*
+            1. **Project Kickoff** - On 2023-03-01, person X announced the commencement of the project. This information is based on the email titled "Project Kickoff" dated 2023-03-01.
+
+            2. **First Phase Completion** - By 2023-03-03, person Y reported that the first phase of the project was completed. This information comes from the email "Project Status Update" dated 2023-03-03.
+
+        ... [more summary points here] ...
+            ` })
             })
                 .then(response => response.json())
                 .then(data => {

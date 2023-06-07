@@ -197,7 +197,7 @@ body {
 
 .project-actions {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 10px;
     border-top: 1px solid #000000;
 }
@@ -335,7 +335,7 @@ input#chat-input.form-control {
 }
 
 #summary {
-    display: flex;
+    /*display: flex;*/
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;

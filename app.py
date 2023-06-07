@@ -1,7 +1,9 @@
 from __future__ import print_function
-
+import pytz
 from flask import copy_current_request_context, abort
 from concurrent.futures import ThreadPoolExecutor
+
+from flask.cli import load_dotenv
 from flask_caching import Cache
 import base64
 import pinecone
@@ -53,6 +55,13 @@ from langchain.agents import Tool
 from langchain.agents import initialize_agent
 from dashboard import dashboard_bp
 
+load_dotenv()
+
+pinecone.init(api_key=os.getenv('PINECONE_API_KEY'), environment=os.getenv('PINECONE_ENVIRONMENT'))
+pinecone_index = pinecone.Index(index_name="ironmind")
+openai.api_key = os.getenv('API_SECRET')
+
+
 
 def create_app():
     app = Flask(__name__)
@@ -72,10 +81,10 @@ def create_app():
         db.create_all()
 
     return app
-
-
-with open('config.json') as f:
-    config = json.load(f)
+#
+#
+# with open('config.json') as f:
+#     config = json.load(f)
 
 app = create_app()
 login = LoginManager(app)
@@ -87,7 +96,7 @@ app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_USERNAME'] = 'apikey'
-app.config['MAIL_PASSWORD'] = config['send-grid-api']
+# app.config['MAIL_PASSWORD'] = config['send-grid-api']
 
 mail = Mail(app)
 
@@ -97,13 +106,15 @@ GPT_MODEL = Config.GPT_MODEL
 
 embed = OpenAIEmbeddings(
     model=EMBEDDING_MODEL,
-    openai_api_key=config['api_secret']
+    openai_api_key=os.getenv('API_SECRET')
 )
+#
+# app.config['MAIL_PASSWORD'] = os.getenv('SEND_GRID_API')
+# pinecone.init(api_key=os.getenv('PINECONE_API_KEY'), environment=os.getenv('PINECONE_ENVIRONMENT'))
+# openai.api_key = os.getenv('API_SECRET')
+# pinecone_index = pinecone.Index(index_name="ironmind")
 
-pinecone.init(api_key=config['pinecone-api-key'], environment=config['pinecone-environment'])
-pinecone_index = pinecone.Index(index_name="ironmind")
-
-openai.api_key = config['api_secret']
+# openai.api_key = config['api_secret']
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = Config.GMAIL_SCOPES
@@ -154,7 +165,7 @@ def send_invitation_email(invitation, project_name):
         {url_for('accept_invitation', token=token, _external=True)}
         ''')
     try:
-        sg = SendGridAPIClient(config['send-grid-api'])
+        sg = SendGridAPIClient(os.getenv('SEND_GRID_API'))
         response = sg.send(message)
         print(response.status_code)
         print(response.body)
@@ -472,7 +483,7 @@ def ask(
         project_id: int,
         query: str,
         model: str = GPT_MODEL,
-        token_budget: int = 4097 - 500,
+        token_budget: int = 8097 - 500,
         print_message: bool = False,
 ) -> str:
     # get all emails from the project
@@ -578,13 +589,13 @@ def ask(
     if document is not None:
         path, filename = os.path.split(document.content)
         document_link = url_for('dashboard_bp.serve_file', path=path, filename=filename)
-        response_message += f'<br><br> You can view the related document at <a href="{document_link}">{filename}</a>.'
+        response_message += f' You can view the related document at <br><br><a href="{document_link}" style="text-decoration: underline; font-weight: bold">{filename}</a>.'
 
     # Try to find an email relevant to the response
     email = get_relevant_email(response_message, project_id)
     if email is not None:
         email_link = url_for('dashboard_bp.email', email_id=email.id)
-        response_message += f'<br><br> You can view the related email at <a href="{email_link}">email thread</a>.'
+        response_message += f' You can view the related email at <br><br><a href="{email_link}" style="text-decoration: underline; font-weight: bold">email thread</a>.'
 
     # Add the model's response to the conversation
     conversation.add_model_message(response_message)
@@ -615,116 +626,6 @@ def sanitize_filename(filename):
     return filename
 
 
-# def scrape(project_id, project_domain):
-#     local_folder = 'attachments'
-#     latest_email_date = (
-#         db.session.query(func.max(Email.date_of_email))
-#         .filter(Email.project_id == project_id)
-#         .scalar()
-#     )
-#
-#     if latest_email_date is not None:
-#         latest_email_date = latest_email_date.astimezone(timezone.utc)
-#         latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
-#     else:
-#         latest_email_date_str = ""
-#
-#     if not os.path.exists(local_folder):
-#         os.makedirs(local_folder)
-#
-#     creds = None
-#     if os.path.exists('token.json'):
-#         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-#     if not creds or not creds.valid:
-#         if creds and creds.expired and creds.refresh_token:
-#             creds.refresh(Request())
-#         else:
-#             flow = InstalledAppFlow.from_client_secrets_file(
-#                 'credentials.json', SCOPES)
-#             creds = flow.run_local_server(port=0)
-#         with open('token.json', 'w') as token:
-#             token.write(creds.to_json())
-#
-#     try:
-#         service = build('gmail', 'v1', credentials=creds)
-#         domain = project_domain
-#
-#         query = f"to:{domain} OR from:{domain}"
-#         if latest_email_date_str:
-#             query += f" after:{latest_email_date_str}"
-#
-#         emails = []
-#         result = service.users().messages().list(userId='me', q=query).execute()
-#         messages = result.get('messages', [])
-#
-#         for message in messages:
-#             msg = service.users().messages().get(userId='me', id=message['id']).execute()
-#
-#             attachments = []
-#             for part in msg.get('payload', {}).get('parts', []):
-#                 if part.get('filename') and part.get('body', {}).get('attachmentId'):
-#                     attachment_id = part['body']['attachmentId']
-#                     attachment = service.users().messages().attachments().get(
-#                         userId='me', messageId=message['id'], id=attachment_id
-#                     ).execute()
-#                     data = attachment.get('data')
-#                     file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
-#                     file_name = sanitize_filename(part.get('filename'))  # Sanitize the filename
-#
-#                     with open(os.path.join(local_folder, file_name), 'wb') as local_file:
-#                         local_file.write(file_data)
-#                         attachments.append({'file_path': local_file.name, 'file_name': file_name})
-#
-#                         new_document = Document(
-#                             name=file_name,
-#                             content=local_file.name,  # store the file path
-#                             project_id=project_id,
-#                         )
-#                         db.session.add(new_document)
-#             db.session.commit()
-#
-#             msg['attachments'] = attachments
-#             emails.append(msg)
-#
-#         if not emails:
-#             print(f'No emails found to or from {domain}.')
-#             return
-#
-#         email_data = []
-#
-#         for email in emails:
-#             headers = email['payload']['headers']
-#             snippet = email['snippet']
-#             subject = next((h['value'] for h in headers if h['name'] == 'Subject'), None)
-#             sender = next((h['value'] for h in headers if h['name'] == 'From'), None)
-#             to = next((h['value'] for h in headers if h['name'] == 'To'), None)
-#             date = next(h['value'] for h in headers if h['name'] == 'Date')
-#
-#             modified_snippet = f"Date: {date} From: {sender} To: {to} {snippet}"
-#             email_data.append({'subject': subject, 'snippet': modified_snippet, 'date_of_email': date})
-#
-#             for attachment in email['attachments']:
-#                 file_path = attachment['file_path']
-#                 file_name = attachment['file_name']
-#                 file_content = None
-#
-#                 if file_path.endswith('.pdf'):
-#                     file_content = extract_text_from_pdf(file_path)
-#                 elif file_path.endswith('.docx'):
-#                     file_content = extract_text_from_docx(file_path)
-#
-#                 if file_content:
-#                     email_data.append({
-#                         'subject': file_name,
-#                         'snippet': file_content,
-#                         'date_of_email': date
-#                     })
-#
-#         return email_data
-#
-#     except HttpError as error:
-#         print(f'An error occurred: {error}')
-
 
 # Function to generate embeddings for email subjects and snippets
 def scrape(project_id, project_domain):
@@ -737,7 +638,7 @@ def scrape(project_id, project_domain):
         )
 
         if latest_email_date is not None:
-            latest_email_date = latest_email_date.astimezone(timezone.utc)
+            latest_email_date = latest_email_date.astimezone(pytz.timezone('UTC'))
             latest_email_date_str = latest_email_date.strftime("%Y/%m/%d")
         else:
             latest_email_date_str = ""
@@ -746,17 +647,30 @@ def scrape(project_id, project_domain):
             os.makedirs(local_folder)
 
         creds = None
-        if os.path.exists('token.json'):
-            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        creds = Credentials.from_authorized_user_info({
+            "token": os.getenv('TOKEN'),
+            "refresh_token": os.getenv('REFRESH_TOKEN'),
+            "token_uri": os.getenv('TOKEN_URI'),
+            "client_id": os.getenv('CLIENT_ID'),
+            "client_secret": os.getenv('CLIENT_SECRET'),
+            "scopes": [os.getenv('SCOPES')],
+            "token_expiry": os.getenv('EXPIRY'),
+        })
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
+                flow = InstalledAppFlow.from_client_config({
+                    "web": {
+                        "client_id": os.getenv('CLIENT_ID'),
+                        "project_id": os.getenv('PROJECT_ID'),
+                        "auth_uri": os.getenv('AUTH_URI'),
+                        "token_uri": os.getenv('TOKEN_URI'),
+                        "auth_provider_x509_cert_url": os.getenv('AUTH_PROVIDER_X509_CERT_URL'),
+                        "client_secret": os.getenv('CLIENT_SECRET')
+                    }
+                }, scopes=[os.getenv('SCOPES')])
                 creds = flow.run_local_server(port=0)
-            with open('token.json', 'w') as token:
-                token.write(creds.to_json())
 
         try:
             service = build('gmail', 'v1', credentials=creds)

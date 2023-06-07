@@ -19,6 +19,8 @@
                             <a href="{{ url_for('dashboard_bp.project_documents', project_id=project.id) }}" class="btn btn-link"><i class="fas fa-dochub"></i> Documents</a>
                             <a href="{{ url_for('dashboard_bp.project_summary', project_id=project.id) }}" class="btn btn-link"><i class="fas fa-list-ul"></i> Summary</a>
                             <a href="{{ url_for('project_members', project_id=project.id) }}" class="btn btn-link"><i class="fas fa-stream"></i> Add User</a>
+                            <a href="{{ url_for('dashboard_bp.project_mapping', project_id=project.id) }}" class="btn btn-link"><i class="fas fa-stream"></i> Timeline</a>
+                            <a href="{{ url_for('dashboard_bp.project_function', project_id=project.id) }}" class="btn btn-link"><i class="fas fa-stream"></i> Function</a>
                         </div>
                     </div>
                 {% endfor %}

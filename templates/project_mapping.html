@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div>
+    <div class="container-documents">
+        <div class="header">
+            <h1>{{ project.name }}</h1>
+            <button id="update-mapping" class="btn btn-action">
+                <i class="fas fa-edit"></i> Corporate Mapping
+                <span id="update-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+            </button>
+        </div>
+
+            <div class="project-card">
+                <h2 style="text-align: center">Project Timeline</h2>
+                <p id="mapping" style="text-align: left"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        document.getElementById('update-mapping').addEventListener('click', function() {
+            fetch('/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    project_id: '{{ project.id }}',
+                    user_input: `
+# Emails Dataset
+
+*Email 1*
+From: X
+Date: 2023-03-01
+Snippet:  ${'{{ snippet1 }}'}
+
+*Email 2*
+From: Y
+Date: 2023-03-03
+Snippet: Date: ${'{{ snippetLast }}'}
+
+... [more emails here] ...
+
+---
+
+## Task
+
+Given the above emails dataset, please analyze the information and construct a detailed timeline of events. This timeline should identify key milestones, decisions, people involved, and any other significant elements worth noting. Please include between 5-10 data points in the timeline, ensuring that each point is clearly related to the details provided in the emails.
+
+For each data point in the timeline, provide:
+
+1. The date of the event.
+2. The people involved.
+3. A brief description of the event.
+4. The email(s) that this event is based on (by noting the subject and date of the email).
+
+Finally, the timeline should be laid out chronologically, starting from the earliest date mentioned in the emails to the latest. Please present this timeline in a clearly structured format for easy comprehension. Each email is only a small snippet of the full project. Use the emails as a whole to bring together your answer.
+
+Example:
+
+*Timeline*
+1. **2023-03-01 - Project Kickoff**
+- People involved: X
+- Event description: Project commencement announced.
+- Based on: Email "Project Kickoff" dated 2023-03-01
+
+2. **2023-03-03 - First Phase Completion**
+- People involved: Y
+- Event description: Completion of the first phase of the project.
+- Based on: Email "Project Status Update" dated 2023-03-03
+... [more timeline points here] ...
+`
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Extract the "updated_summary" field from the JSON response
+                    const updatedSummary = data.updated_summary;
+
+                    // Replace newline characters with HTML line breaks to ensure correct formatting
+                    const formattedSummary = updatedSummary.replace(/\n/g, "<br />");
+
+                    // Update the content of the "mapping" paragraph with the formatted summary
+                    document.getElementById('mapping').innerHTML = formattedSummary;
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+        });
+    </script>
+
+
+{% endblock %}

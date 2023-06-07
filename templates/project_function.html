@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div>
+    <div class="container-documents">
+        <div class="header">
+            <h1>{{ project.name }}</h1>
+            <button id="update-function" class="btn btn-action">
+                <i class="fas fa-edit"></i> Corporate Mapping
+                <span id="update-spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+            </button>
+        </div>
+
+            <div class="project-card">
+                <h2 style="text-align: center">Project Mapping</h2>
+                <p id="function" style="text-align: left"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        document.getElementById('update-function').addEventListener('click', function() {
+            fetch('/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    project_id: '{{ project.id }}',
+                    user_input: `
+# Emails Dataset
+
+*Email 1*
+From: X
+Date: 2023-03-01
+Snippet:  ${'{{ snippet1 }}'}
+
+*Email 2*
+From: Y
+Date: 2023-03-03
+Snippet: Date: ${'{{ snippetLast }}'}
+
+... [more emails here] ...
+
+---
+
+## Task
+
+Given the above emails dataset, please analyze the information and construct a list of common requests originating from the sender. The goal is to identify common and similar company actions that can be automated down the road.
+
+For each significant or identifiable request pattern, list out the following:
+
+1. State the name and type of request
+2. Identify the business function.
+3. Mention how the process could be automated
+
+The summary should be well-organized and structured to ensure easy comprehension. It should begin with the earliest events and proceed chronologically to the most recent events.
+
+Example
+
+<strong>Request Name</strong>: Project Initiation
+<strong>Business Function</strong>: Project Management
+<strong>Automation</strong>: This request involves the initiation of a project which could be automated with a project management system. The system could auto-create a project in the database once a designated person or team gives the command, such as by sending an email or through a user interface. It would set the start date, assign team members, and generate initial tasks based on pre-configured project templates.
+
+<strong>Request Name</strong>: Project Phase Completion Updates
+<strong>Business Function</strong>: Project Reporting
+<strong>Automation</strong>: This is an update about the completion of a project phase. An automated solution could be a project management tool that tracks the progress of different phases and sends updates when a phase is marked as completed. These updates could be disseminated via email or dashboard notifications to relevant stakeholders.
+`
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Extract the "updated_summary" field from the JSON response
+                    const updatedFunction = data.updated_summary;
+
+                    // Replace newline characters with HTML line breaks to ensure correct formatting
+                    const formattedFunction = updatedFunction.replace(/\n/g, "<br />");
+
+                    // Update the content of the "mapping" paragraph with the formatted summary
+                    document.getElementById('function').innerHTML = formattedFunction;
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+        });
+    </script>
+
+
+{% endblock %}
